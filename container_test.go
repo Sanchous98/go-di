@@ -5,7 +5,9 @@ import (
 	"testing"
 )
 
-type AnotherTestStruct struct{}
+type AnotherTestStruct struct {
+	Container Container `inject:""`
+}
 
 type TestStruct struct {
 	Dependency  *AnotherTestStruct `inject:""`
@@ -59,4 +61,13 @@ func TestAutoWiring(t *testing.T) {
 	assert.NotNil(t, testStruct.Dependency2)
 	assert.NotNil(t, testStruct.Dependency3)
 	assert.NotNil(t, testStruct.Dependency4)
+}
+
+func TestSelfReferences(t *testing.T) {
+	container := NewContainer()
+	testStruct := &AnotherTestStruct{}
+	container.Set(testStruct)
+	container.Compile()
+	assert.NotNil(t, testStruct.Container)
+	assert.IsType(t, &serviceContainer{}, testStruct.Container)
 }

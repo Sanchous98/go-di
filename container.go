@@ -31,10 +31,16 @@ func NewContainer() PrecompiledGlobalState {
 }
 
 func (c *serviceContainer) Get(_type interface{}) interface{} {
-	serviceType := reflect.TypeOf(_type)
+	var serviceType reflect.Type
+	switch _type := _type.(type) {
+	case reflect.Type:
+		serviceType = _type
+	default:
+		serviceType = reflect.TypeOf(_type)
 
-	if serviceType.Kind() == reflect.Ptr {
-		serviceType = serviceType.Elem()
+		if serviceType.Kind() == reflect.Ptr {
+			serviceType = serviceType.Elem()
+		}
 	}
 
 	var resolved, resolver interface{}
@@ -53,13 +59,25 @@ func (c *serviceContainer) Get(_type interface{}) interface{} {
 }
 
 func (c *serviceContainer) Has(_type interface{}) bool {
-	serviceType := reflect.TypeOf(_type)
+	var serviceType reflect.Type
+	switch _type := _type.(type) {
+	case reflect.Type:
+		serviceType = _type
+	default:
+		serviceType = reflect.TypeOf(_type)
 
-	if serviceType.Kind() == reflect.Ptr {
-		serviceType = serviceType.Elem()
+		if serviceType.Kind() == reflect.Ptr {
+			serviceType = serviceType.Elem()
+		}
 	}
 
-	_, ok := c.resolvers.Load(serviceType)
+	_, ok := c.resolved.Load(serviceType)
+
+	if ok {
+		return true
+	}
+
+	_, ok = c.resolvers.Load(serviceType)
 
 	return ok
 }
@@ -119,6 +137,13 @@ func (c *serviceContainer) All() []interface{} {
 }
 
 func (c *serviceContainer) Compile() {
+	// Self references. Is needed to inject Container as a service
+	c.resolved.Store(reflect.TypeOf(new(Container)).Elem(), c)
+	c.resolved.Store(reflect.TypeOf(new(PrecompiledContainer)).Elem(), c)
+	c.resolved.Store(reflect.TypeOf(new(Environment)).Elem(), c)
+	c.resolved.Store(reflect.TypeOf(new(GlobalState)).Elem(), c)
+	c.resolved.Store(reflect.TypeOf(new(PrecompiledGlobalState)).Elem(), c)
+
 	c.once.Do(func() {
 		c.LoadEnv()
 		c.mu.Lock()
@@ -201,7 +226,7 @@ func (c *serviceContainer) fillService(service interface{}) interface{} {
 			c.resolvedNum++
 		}
 
-		if field.Type().Kind() == reflect.Ptr {
+		if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
 			field.Set(reflect.ValueOf(newService))
 		} else {
 			field.Set(reflect.ValueOf(newService).Elem())
