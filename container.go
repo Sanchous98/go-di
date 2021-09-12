@@ -3,6 +3,7 @@ package di
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"reflect"
@@ -143,6 +144,7 @@ func (c *serviceContainer) Compile() {
 	c.resolved.Store(reflect.TypeOf(new(Environment)).Elem(), c)
 	c.resolved.Store(reflect.TypeOf(new(GlobalState)).Elem(), c)
 	c.resolved.Store(reflect.TypeOf(new(PrecompiledGlobalState)).Elem(), c)
+	c.resolvedNum += 5
 
 	c.once.Do(func() {
 		c.LoadEnv()
@@ -286,18 +288,21 @@ func (c *serviceContainer) LoadEnv() {
 }
 
 func (c *serviceContainer) loadEnv(reader *bufio.Reader) {
-	for {
-		envVar, err := reader.ReadBytes('\n')
+	var envVar []byte
+	var err error
 
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				panic(err)
-			}
+	for {
+		if errors.Is(err, io.EOF) {
+			break
 		}
 
-		env := bytes.Split(envVar, []byte{'='})
+		envVar, err = reader.ReadBytes('\n')
+
+		if err != nil && !errors.Is(err, io.EOF) {
+			panic(err)
+		}
+
+		env := bytes.Split(bytes.TrimSpace(envVar), []byte{'='})
 		c.params[string(env[0])] = string(env[1])
 	}
 }

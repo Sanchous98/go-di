@@ -1,6 +1,8 @@
 package di
 
 import (
+	"bufio"
+	"bytes"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -17,7 +19,7 @@ type TestStruct struct {
 }
 
 func TestResolverBinding(t *testing.T) {
-	container := NewContainer()
+	container := &serviceContainer{}
 	container.Set(func(cntr Container) *TestStruct {
 		testStruct := &TestStruct{}
 		testStruct.Dependency = cntr.Get(testStruct.Dependency).(*AnotherTestStruct)
@@ -37,10 +39,11 @@ func TestResolverBinding(t *testing.T) {
 	assert.NotNil(t, testStruct.Dependency2)
 	assert.NotNil(t, testStruct.Dependency3)
 	assert.NotNil(t, testStruct.Dependency4)
+	assert.Len(t, container.All(), container.resolvedNum)
 }
 
 func TestServiceBinding(t *testing.T) {
-	container := NewContainer()
+	container := &serviceContainer{}
 	container.Set(&TestStruct{})
 	container.Set(&AnotherTestStruct{})
 	container.Compile()
@@ -49,6 +52,7 @@ func TestServiceBinding(t *testing.T) {
 	assert.NotNil(t, testStruct.Dependency2)
 	assert.NotNil(t, testStruct.Dependency3)
 	assert.NotNil(t, testStruct.Dependency4)
+	assert.Len(t, container.All(), container.resolvedNum)
 }
 
 func TestAutoWiring(t *testing.T) {
@@ -70,4 +74,12 @@ func TestSelfReferences(t *testing.T) {
 	container.Compile()
 	assert.NotNil(t, testStruct.Container)
 	assert.IsType(t, &serviceContainer{}, testStruct.Container)
+}
+
+func TestServiceContainer_loadEnv(t *testing.T) {
+	container := &serviceContainer{}
+	container.params = make(map[string]string)
+	container.loadEnv(bufio.NewReader(bytes.NewReader([]byte("APP_ENV=dev\nDB_NAME=test"))))
+	assert.EqualValues(t, "dev", container.GetParam("APP_ENV"))
+	assert.EqualValues(t, "test", container.GetParam("DB_NAME"))
 }
