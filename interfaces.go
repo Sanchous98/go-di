@@ -11,12 +11,15 @@ type Container interface {
 // PrecompiledContainer is an extension of Container that can fill services before usage
 type PrecompiledContainer interface {
 	Compile()
+	PreCompile(handler func(Event))
+	PostCompile(handler func(Event))
 	Destroy()
 	Container
 }
 
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
+	GlobalState
 	SetEntryPoints(...func(GlobalState))
 	Run()
 }
