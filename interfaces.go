@@ -28,7 +28,7 @@ type PrecompiledContainer interface {
 type Sandbox interface {
 	AddEntryPoint(func(GlobalState))
 	Run()
-	GlobalState
+	PrecompiledGlobalState
 }
 
 // Environment handles .env vars
