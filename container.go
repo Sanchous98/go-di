@@ -22,7 +22,7 @@ const (
 type serviceContainer struct {
 	resolversNum, resolvedNum int
 	resolvers, resolved       sync.Map
-	mu                        sync.Mutex
+	mu                        sync.RWMutex
 	once                      sync.Once
 	params                    map[string]string
 }
@@ -84,7 +84,7 @@ func (c *serviceContainer) Has(_type interface{}) bool {
 }
 
 func (c *serviceContainer) Set(resolver interface{}) {
-	c.mu.Lock()
+	c.mu.RLock()
 
 	typeOf := reflect.TypeOf(resolver)
 
@@ -122,7 +122,7 @@ func (c *serviceContainer) Set(resolver interface{}) {
 		})
 	}
 	c.resolversNum++
-	c.mu.Unlock()
+	c.mu.RUnlock()
 }
 
 func (c *serviceContainer) All() []interface{} {
@@ -138,6 +138,12 @@ func (c *serviceContainer) All() []interface{} {
 }
 
 func (c *serviceContainer) Compile() {
+	c.once.Do(c.compile)
+}
+
+func (c *serviceContainer) compile() {
+	c.LoadEnv()
+	c.mu.Lock()
 	// Self references. Is needed to inject Container as a service
 	c.resolved.Store(reflect.TypeOf(new(Container)).Elem(), c)
 	c.resolved.Store(reflect.TypeOf(new(PrecompiledContainer)).Elem(), c)
@@ -146,24 +152,22 @@ func (c *serviceContainer) Compile() {
 	c.resolved.Store(reflect.TypeOf(new(PrecompiledGlobalState)).Elem(), c)
 	c.resolvedNum += 5
 
-	c.once.Do(func() {
-		c.LoadEnv()
-		c.mu.Lock()
+	c.resolvers.Range(func(_type, resolver interface{}) bool {
+		resolverValue := reflect.ValueOf(resolver)
+		var args []reflect.Value = nil
 
-		c.resolvers.Range(func(_type, resolver interface{}) bool {
-			resolverValue := reflect.ValueOf(resolver)
-			if resolverValue.Type().NumIn() == 0 {
-				c.resolved.Store(_type.(reflect.Type), resolverValue.Call(nil)[0].Interface())
-			} else {
-				c.resolved.Store(_type.(reflect.Type), resolverValue.Call([]reflect.Value{reflect.ValueOf(c)})[0].Interface())
-			}
-			c.resolvedNum++
-			return true
-		})
+		if resolverValue.Type().NumIn() > 0 {
+			args = []reflect.Value{reflect.ValueOf(c)}
+		}
 
-		c.mu.Unlock()
-		runtime.GC()
+		c.resolved.Store(_type.(reflect.Type), resolverValue.Call(args)[0].Interface())
+		c.resolvedNum++
+
+		return true
 	})
+
+	c.mu.Unlock()
+	runtime.GC()
 }
 
 func (c *serviceContainer) Destroy() {
@@ -244,8 +248,8 @@ func (c *serviceContainer) fillService(service interface{}) interface{} {
 }
 
 func (c *serviceContainer) LoadEnv() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	c.params = make(map[string]string)
 
 	for _, envVar := range os.Environ() {

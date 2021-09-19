@@ -10,6 +10,7 @@ var app Sandbox
 
 func init() {
 	app = &application{PrecompiledGlobalState: NewContainer(), entryPoints: make([]func(GlobalState), 0)}
+	app.Set(Application)
 }
 
 func Application() Sandbox {
@@ -22,8 +23,8 @@ type application struct {
 	entryPoints []func(GlobalState)
 }
 
-func (a *application) SetEntryPoints(entryPoints ...func(GlobalState)) {
-	a.entryPoints = entryPoints
+func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
+	a.entryPoints = append(a.entryPoints, entryPoint)
 }
 
 func (a *application) Run() {
