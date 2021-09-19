@@ -1,5 +1,12 @@
 package di
 
+// Event is an object, fired to handlers on specific actions
+type Event interface {
+	StopPropagation()
+	CanPropagate() bool
+	GetElement() interface{}
+}
+
 // Container handles services and fills them
 type Container interface {
 	Set(interface{})
@@ -11,17 +18,17 @@ type Container interface {
 // PrecompiledContainer is an extension of Container that can fill services before usage
 type PrecompiledContainer interface {
 	Compile()
-	PreCompile(handler func(Event))
-	PostCompile(handler func(Event))
+	PreCompile(func(Event), int)
+	PostCompile(func(Event), int)
 	Destroy()
 	Container
 }
 
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
-	GlobalState
-	SetEntryPoints(...func(GlobalState))
+	AddEntryPoint(func(GlobalState))
 	Run()
+	GlobalState
 }
 
 // Environment handles .env vars

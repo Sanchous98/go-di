@@ -19,7 +19,7 @@ type TestStruct struct {
 }
 
 func TestResolverBinding(t *testing.T) {
-	container := &serviceContainer{}
+	container := &serviceContainer{params: make(map[string]string)}
 	container.Set(func(cntr Container) *TestStruct {
 		testStruct := &TestStruct{}
 		testStruct.Dependency = cntr.Get(testStruct.Dependency).(*AnotherTestStruct)
@@ -43,7 +43,7 @@ func TestResolverBinding(t *testing.T) {
 }
 
 func TestServiceBinding(t *testing.T) {
-	container := &serviceContainer{}
+	container := &serviceContainer{params: make(map[string]string)}
 	container.Set(&TestStruct{})
 	container.Set(&AnotherTestStruct{})
 	container.Compile()
@@ -77,9 +77,21 @@ func TestSelfReferences(t *testing.T) {
 }
 
 func TestServiceContainer_loadEnv(t *testing.T) {
-	container := &serviceContainer{}
-	container.params = make(map[string]string)
+	container := &serviceContainer{params: make(map[string]string)}
 	container.loadEnv(bufio.NewReader(bytes.NewReader([]byte("APP_ENV=dev\nDB_NAME=test"))))
 	assert.EqualValues(t, "dev", container.GetParam("APP_ENV"))
 	assert.EqualValues(t, "test", container.GetParam("DB_NAME"))
+}
+
+func TestServiceContainer_CompileEvents(t *testing.T) {
+	container := NewContainer()
+	container.PreCompile(func(event Event) {
+		assert.NotNil(t, event.GetElement())
+	}, 0)
+
+	container.PostCompile(func(event Event) {
+		assert.NotNil(t, event.GetElement())
+	}, 0)
+
+	container.Compile()
 }
