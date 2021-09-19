@@ -19,12 +19,18 @@ const (
 	envTag = "env"
 )
 
+type CompileEvent struct {
+	BaseEvent
+}
+
 type serviceContainer struct {
 	resolversNum, resolvedNum int
 	resolvers, resolved       sync.Map
 	mu                        sync.RWMutex
 	once                      sync.Once
 	params                    map[string]string
+	preCompile                []func(Event)
+	postCompile               []func(Event)
 }
 
 func NewContainer() PrecompiledGlobalState {
@@ -138,7 +144,23 @@ func (c *serviceContainer) All() []interface{} {
 }
 
 func (c *serviceContainer) Compile() {
+	event := &CompileEvent{BaseEvent{element: c}}
+
+	for _, preCompile := range c.preCompile {
+		if event.CanPropagate() {
+			preCompile(event)
+		}
+	}
+
 	c.once.Do(c.compile)
+
+	event = &CompileEvent{BaseEvent{element: c}}
+
+	for _, postCompile := range c.postCompile {
+		if event.CanPropagate() {
+			postCompile(event)
+		}
+	}
 }
 
 func (c *serviceContainer) compile() {
@@ -317,4 +339,12 @@ func (c *serviceContainer) GetParam(param string) string {
 	}
 
 	return c.params[param]
+}
+
+func (c *serviceContainer) PreCompile(handler func(Event)) {
+	c.preCompile = append(c.preCompile, handler)
+}
+
+func (c *serviceContainer) PostCompile(handler func(Event)) {
+	c.postCompile = append(c.postCompile, handler)
 }
