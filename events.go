@@ -8,9 +8,7 @@ type BaseEvent struct {
 }
 
 func (e *BaseEvent) StopPropagation() {
-	if atomic.LoadUint32(&e.stoppedPropagation) == 0 {
-		atomic.StoreUint32(&e.stoppedPropagation, 1)
-	}
+	atomic.CompareAndSwapUint32(&e.stoppedPropagation, 0, 1)
 }
 
 func (e *BaseEvent) CanPropagate() bool {
