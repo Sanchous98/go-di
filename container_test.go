@@ -3,7 +3,7 @@ package di
 import (
 	"bufio"
 	"bytes"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"testing"
 )
 
@@ -18,10 +18,16 @@ type TestStruct struct {
 	Dependency4 AnotherTestStruct  `inject:""`
 }
 
-func TestResolverBinding(t *testing.T) {
-	container := &serviceContainer{params: make(map[string]string)}
-	container.Set(func(cntr Container) *TestStruct {
-		testStruct := &TestStruct{}
+type ContainerTestSuite struct {
+	suite.Suite
+	container PrecompiledGlobalState
+}
+
+func (s *ContainerTestSuite) SetupTest() { s.container = NewContainer() }
+
+func (s *ContainerTestSuite) TestResolverBinding() {
+	s.container.Set(func(cntr Container) *TestStruct {
+		testStruct := new(TestStruct)
 		testStruct.Dependency = cntr.Get(testStruct.Dependency).(*AnotherTestStruct)
 		testStruct.Dependency2 = *cntr.Get(testStruct.Dependency2).(*AnotherTestStruct)
 		testStruct.Dependency3 = cntr.Get(testStruct.Dependency3).(*AnotherTestStruct)
@@ -29,69 +35,57 @@ func TestResolverBinding(t *testing.T) {
 
 		return testStruct
 	})
-	container.Set(func(cntr Container) *AnotherTestStruct {
-		return &AnotherTestStruct{}
-	})
-	container.Compile()
-	var testStruct *TestStruct
-	testStruct = container.Get(testStruct).(*TestStruct)
-	assert.NotNil(t, testStruct.Dependency)
-	assert.NotNil(t, testStruct.Dependency2)
-	assert.NotNil(t, testStruct.Dependency3)
-	assert.NotNil(t, testStruct.Dependency4)
-	assert.Len(t, container.All(), container.resolvedNum)
+	s.container.Set(func(cntr Container) *AnotherTestStruct { return new(AnotherTestStruct) })
+	s.container.Compile()
+	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
+	s.NotNil(testStruct.Dependency)
+	s.NotNil(testStruct.Dependency2)
+	s.NotNil(testStruct.Dependency3)
+	s.NotNil(testStruct.Dependency4)
+	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
-func TestServiceBinding(t *testing.T) {
-	container := &serviceContainer{params: make(map[string]string)}
-	container.Set(&TestStruct{})
-	container.Set(&AnotherTestStruct{})
-	container.Compile()
-	testStruct := container.Get((*TestStruct)(nil)).(*TestStruct)
-	assert.NotNil(t, testStruct.Dependency)
-	assert.NotNil(t, testStruct.Dependency2)
-	assert.NotNil(t, testStruct.Dependency3)
-	assert.NotNil(t, testStruct.Dependency4)
-	assert.Len(t, container.All(), container.resolvedNum)
+func (s *ContainerTestSuite) TestServiceBinding() {
+	s.container.Set(new(TestStruct))
+	s.container.Set(new(AnotherTestStruct))
+	s.container.Compile()
+	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
+	s.NotNil(testStruct.Dependency)
+	s.NotNil(testStruct.Dependency2)
+	s.NotNil(testStruct.Dependency3)
+	s.NotNil(testStruct.Dependency4)
+	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
-func TestAutoWiring(t *testing.T) {
-	container := NewContainer()
-	testStruct := &TestStruct{}
-	container.Set(testStruct)
-	container.Compile()
+func (s *ContainerTestSuite) TestAutoWiring() {
+	testStruct := new(TestStruct)
+	s.container.Set(testStruct)
+	s.container.Compile()
 
-	assert.NotNil(t, testStruct.Dependency)
-	assert.NotNil(t, testStruct.Dependency2)
-	assert.NotNil(t, testStruct.Dependency3)
-	assert.NotNil(t, testStruct.Dependency4)
+	s.NotNil(testStruct.Dependency)
+	s.NotNil(testStruct.Dependency2)
+	s.NotNil(testStruct.Dependency3)
+	s.NotNil(testStruct.Dependency4)
 }
 
-func TestSelfReferences(t *testing.T) {
-	container := NewContainer()
-	testStruct := &AnotherTestStruct{}
-	container.Set(testStruct)
-	container.Compile()
-	assert.NotNil(t, testStruct.Container)
-	assert.IsType(t, &serviceContainer{}, testStruct.Container)
+func (s *ContainerTestSuite) TestSelfReferences() {
+	testStruct := new(AnotherTestStruct)
+	s.container.Set(testStruct)
+	s.container.Compile()
+	s.NotNil(testStruct.Container)
+	s.IsType(new(serviceContainer), testStruct.Container)
 }
 
-func TestServiceContainer_loadEnv(t *testing.T) {
-	container := &serviceContainer{params: make(map[string]string)}
-	container.loadEnv(bufio.NewReader(bytes.NewReader([]byte("APP_ENV=dev\nDB_NAME=test"))))
-	assert.EqualValues(t, "dev", container.GetParam("APP_ENV"))
-	assert.EqualValues(t, "test", container.GetParam("DB_NAME"))
+func (s *ContainerTestSuite) Test_loadEnv() {
+	s.container.(*serviceContainer).loadEnv(bufio.NewReader(bytes.NewReader([]byte("APP_ENV=dev\nDB_NAME=test"))))
+	s.EqualValues("dev", s.container.GetParam("APP_ENV"))
+	s.EqualValues("test", s.container.GetParam("DB_NAME"))
 }
 
-func TestServiceContainer_CompileEvents(t *testing.T) {
-	container := NewContainer()
-	container.PreCompile(func(event Event) {
-		assert.NotNil(t, event.GetElement())
-	}, 0)
-
-	container.PostCompile(func(event Event) {
-		assert.NotNil(t, event.GetElement())
-	}, 0)
-
-	container.Compile()
+func (s *ContainerTestSuite) TestCompileEvents() {
+	s.container.PreCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
+	s.container.PostCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
+	s.container.Compile()
 }
+
+func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }

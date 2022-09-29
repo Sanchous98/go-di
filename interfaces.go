@@ -4,15 +4,15 @@ package di
 type Event interface {
 	StopPropagation()
 	CanPropagate() bool
-	GetElement() interface{}
+	GetElement() any
 }
 
 // Container handles services and fills them
 type Container interface {
-	Set(interface{})
-	Has(interface{}) bool
-	Get(interface{}) interface{}
-	All() []interface{}
+	Set(any)
+	Has(any) bool
+	Get(any) any
+	All() []any
 }
 
 // PrecompiledContainer is an extension of Container that can fill services before usage

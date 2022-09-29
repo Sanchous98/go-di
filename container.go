@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -56,7 +55,7 @@ func NewContainer() PrecompiledGlobalState {
 	}
 }
 
-func (c *serviceContainer) Get(_type interface{}) interface{} {
+func (c *serviceContainer) Get(_type any) any {
 	var serviceType reflect.Type
 	switch _type := _type.(type) {
 	case reflect.Type:
@@ -69,7 +68,7 @@ func (c *serviceContainer) Get(_type interface{}) interface{} {
 		}
 	}
 
-	var resolved, resolver interface{}
+	var resolved, resolver any
 	var ok bool
 
 	if resolved, ok = c.resolved.Load(serviceType); !ok {
@@ -84,7 +83,7 @@ func (c *serviceContainer) Get(_type interface{}) interface{} {
 	return resolved
 }
 
-func (c *serviceContainer) Has(_type interface{}) bool {
+func (c *serviceContainer) Has(_type any) bool {
 	var serviceType reflect.Type
 	switch _type := _type.(type) {
 	case reflect.Type:
@@ -108,7 +107,7 @@ func (c *serviceContainer) Has(_type interface{}) bool {
 	return ok
 }
 
-func (c *serviceContainer) Set(resolver interface{}) {
+func (c *serviceContainer) Set(resolver any) {
 	c.mu.RLock()
 
 	typeOf := reflect.TypeOf(resolver)
@@ -142,7 +141,7 @@ func (c *serviceContainer) Set(resolver interface{}) {
 			panic("Container can receive only Resolver or struct or pointer to struct")
 		}
 
-		c.resolvers.Store(value.Type(), func(Container) interface{} {
+		c.resolvers.Store(value.Type(), func(Container) any {
 			return c.fillService(resolver)
 		})
 	}
@@ -150,10 +149,10 @@ func (c *serviceContainer) Set(resolver interface{}) {
 	c.mu.RUnlock()
 }
 
-func (c *serviceContainer) All() []interface{} {
-	all := make([]interface{}, 0, c.resolvedNum)
+func (c *serviceContainer) All() []any {
+	all := make([]any, 0, c.resolvedNum)
 
-	c.resolved.Range(func(_, service interface{}) bool {
+	c.resolved.Range(func(_, service any) bool {
 		all = append(all, service)
 
 		return true
@@ -200,7 +199,7 @@ func (c *serviceContainer) compile() {
 	c.resolved.Store(reflect.TypeOf(new(PrecompiledGlobalState)).Elem(), c)
 	c.resolvedNum += 5
 
-	c.resolvers.Range(func(_type, resolver interface{}) bool {
+	c.resolvers.Range(func(_type, resolver any) bool {
 		resolverValue := reflect.ValueOf(resolver)
 		var args []reflect.Value = nil
 
@@ -215,17 +214,16 @@ func (c *serviceContainer) compile() {
 	})
 
 	c.mu.Unlock()
-	runtime.GC()
 }
 
 func (c *serviceContainer) Destroy() {
 	c.mu.Lock()
-	c.resolved.Range(func(_, resolved interface{}) bool {
-		switch resolved := resolved.(type) {
+	c.resolved.Range(func(_, resolved any) bool {
+		switch resolved.(type) {
 		case Stoppable:
-			resolved.Shutdown()
+			resolved.(Stoppable).Shutdown()
 		case Destructible:
-			resolved.Destructor()
+			resolved.(Destructible).Destructor()
 		}
 
 		return true
@@ -235,12 +233,11 @@ func (c *serviceContainer) Destroy() {
 	c.once = sync.Once{}
 	c.resolvedNum = 0
 	c.resolversNum = 0
-	runtime.GC()
 	c.mu.Unlock()
 }
 
 // fillService builds a Service using singletons from Container or new instances of another Services
-func (c *serviceContainer) fillService(service interface{}) interface{} {
+func (c *serviceContainer) fillService(service any) any {
 	s := reflect.ValueOf(service)
 
 	if s.Kind() == reflect.Ptr {
@@ -262,7 +259,7 @@ func (c *serviceContainer) fillService(service interface{}) interface{} {
 			continue
 		}
 
-		var newService interface{}
+		var newService any
 		field := s.Field(i)
 		dependencyType := field.Type()
 
@@ -287,9 +284,9 @@ func (c *serviceContainer) fillService(service interface{}) interface{} {
 		}
 	}
 
-	switch service := service.(type) {
+	switch service.(type) {
 	case Constructable:
-		service.Constructor()
+		service.(Constructable).Constructor()
 	}
 
 	return service
