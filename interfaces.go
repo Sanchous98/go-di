@@ -9,7 +9,7 @@ type Event interface {
 
 // Container handles services and fills them
 type Container interface {
-	Set(any)
+	Set(any, ...string)
 	Has(any) bool
 	Get(any) any
 	All() []any

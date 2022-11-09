@@ -38,13 +38,13 @@ func (eh eventHandlers) Less(i, j int) bool {
 }
 
 type serviceContainer struct {
-	resolversNum, resolvedNum int
-	resolvers, resolved       sync.Map
-	mu                        sync.RWMutex
-	once                      sync.Once
-	params                    map[string]string
-	preCompile                eventHandlers
-	postCompile               eventHandlers
+	resolversNum, resolvedNum    int
+	resolvers, resolved, tagsMap sync.Map
+	mu                           sync.RWMutex
+	once                         sync.Once
+	params                       map[string]string
+	preCompile                   eventHandlers
+	postCompile                  eventHandlers
 }
 
 func NewContainer() PrecompiledGlobalState {
@@ -107,7 +107,7 @@ func (c *serviceContainer) Has(_type any) bool {
 	return ok
 }
 
-func (c *serviceContainer) Set(resolver any) {
+func (c *serviceContainer) Set(resolver any, tags ...string) {
 	c.mu.RLock()
 
 	typeOf := reflect.TypeOf(resolver)
@@ -130,6 +130,11 @@ func (c *serviceContainer) Set(resolver any) {
 		}
 
 		c.resolvers.Store(returnType, resolver)
+
+		if len(tags) > 0 {
+			c.tagsMap.Store(returnType, tags)
+		}
+
 	} else {
 		value := reflect.ValueOf(resolver)
 
@@ -144,6 +149,10 @@ func (c *serviceContainer) Set(resolver any) {
 		c.resolvers.Store(value.Type(), func(Container) any {
 			return c.fillService(resolver)
 		})
+
+		if len(tags) > 0 {
+			c.tagsMap.Store(value.Type(), tags)
+		}
 	}
 	c.resolversNum++
 	c.mu.RUnlock()
@@ -253,35 +262,35 @@ func (c *serviceContainer) fillService(service any) any {
 			continue
 		}
 
-		_, ok = tags.Lookup(injectTag)
+		tag, ok := tags.Lookup(injectTag)
 
 		if !ok {
 			continue
 		}
 
-		var newService any
 		field := s.Field(i)
-		dependencyType := field.Type()
 
-		if dependencyType.Kind() == reflect.Ptr {
-			dependencyType = dependencyType.Elem()
+		if len(tag) > 0 {
+			if field.Type().Kind() != reflect.Slice {
+				panic("tagged field must be slice")
+			}
+
+			field.Set(reflect.MakeSlice(field.Type(), 1, 1))
+			_type := field.Index(0).Type()
+			field.Set(field.Slice(0, 0))
+
+			c.tagsMap.Range(func(_, tags any) bool {
+				if inArray(tag, tags.([]string)) {
+					field.Set(reflect.Append(field, c.buildService(_type.(reflect.Type))))
+				}
+
+				return true
+			})
+
+			continue
 		}
 
-		if c.Has(dependencyType) {
-			// If service is bound, take it from the container
-			newService = c.Get(dependencyType)
-		} else {
-			newService = reflect.New(dependencyType).Interface()
-			c.fillService(newService)
-			c.resolved.Store(dependencyType, newService)
-			c.resolvedNum++
-		}
-
-		if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
-			field.Set(reflect.ValueOf(newService))
-		} else {
-			field.Set(reflect.ValueOf(newService).Elem())
-		}
+		field.Set(c.buildService(field.Type()))
 	}
 
 	switch service.(type) {
@@ -290,6 +299,30 @@ func (c *serviceContainer) fillService(service any) any {
 	}
 
 	return service
+}
+
+func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
+	var newService any
+	dependencyType := _type
+
+	if dependencyType.Kind() == reflect.Ptr {
+		dependencyType = dependencyType.Elem()
+	}
+
+	if c.Has(dependencyType) {
+		// If service is bound, take it from the container
+		newService = c.Get(dependencyType)
+	} else {
+		newService = reflect.New(dependencyType).Interface()
+		c.fillService(newService)
+		c.resolved.Store(dependencyType, newService)
+		c.resolvedNum++
+	}
+
+	if _type.Kind() == reflect.Ptr || _type.Kind() == reflect.Interface {
+		return reflect.ValueOf(newService)
+	}
+	return reflect.ValueOf(newService).Elem()
 }
 
 func (c *serviceContainer) LoadEnv() {
@@ -369,4 +402,14 @@ func (c *serviceContainer) PreCompile(handler func(Event), importance int) {
 
 func (c *serviceContainer) PostCompile(handler func(Event), importance int) {
 	c.postCompile[importance] = append(c.postCompile[importance], handler)
+}
+
+func inArray[T comparable](needle T, haystack []T) bool {
+	for _, item := range haystack {
+		if item == needle {
+			return true
+		}
+	}
+
+	return false
 }

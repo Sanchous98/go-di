@@ -12,10 +12,12 @@ type AnotherTestStruct struct {
 }
 
 type TestStruct struct {
-	Dependency  *AnotherTestStruct `inject:""`
-	Dependency2 AnotherTestStruct  `inject:""`
-	Dependency3 *AnotherTestStruct `inject:""`
-	Dependency4 AnotherTestStruct  `inject:""`
+	Dependency        *AnotherTestStruct   `inject:""`
+	Dependency2       AnotherTestStruct    `inject:""`
+	Dependency3       *AnotherTestStruct   `inject:""`
+	Dependency4       AnotherTestStruct    `inject:""`
+	TaggedDependency  []AnotherTestStruct  `inject:"test_tag"`
+	TaggedDependency2 []*AnotherTestStruct `inject:"test_tag"`
 }
 
 type ContainerTestSuite struct {
@@ -86,6 +88,23 @@ func (s *ContainerTestSuite) TestCompileEvents() {
 	s.container.PreCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
 	s.container.PostCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
 	s.container.Compile()
+}
+
+func (s *ContainerTestSuite) TestTagged() {
+	testStruct := new(TestStruct)
+	anotherTestStruct := new(AnotherTestStruct)
+	s.container.Set(testStruct)
+	s.container.Set(anotherTestStruct, "test_tag")
+	s.container.Compile()
+
+	s.NotNil(testStruct.Dependency)
+	s.NotNil(testStruct.Dependency2)
+	s.NotNil(testStruct.Dependency3)
+	s.NotNil(testStruct.Dependency4)
+	s.NotNil(testStruct.TaggedDependency)
+	s.True(len(testStruct.TaggedDependency) > 0)
+	s.NotNil(testStruct.TaggedDependency2)
+	s.True(len(testStruct.TaggedDependency2) > 0)
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
