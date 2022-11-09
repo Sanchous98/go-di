@@ -276,12 +276,18 @@ func (c *serviceContainer) fillService(service any) any {
 			}
 
 			field.Set(reflect.MakeSlice(field.Type(), 1, 1))
-			_type := field.Index(0).Type()
+			_t := field.Index(0).Type()
 			field.Set(field.Slice(0, 0))
 
-			c.tagsMap.Range(func(_, tags any) bool {
+			c.tagsMap.Range(func(_type, tags any) bool {
 				if inArray(tag, tags.([]string)) {
-					field.Set(reflect.Append(field, c.buildService(_type.(reflect.Type))))
+					newService := c.buildService(_type.(reflect.Type))
+
+					if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
+						field.Set(reflect.Append(field, newService))
+					} else {
+						field.Set(reflect.Append(field, newService.Elem()))
+					}
 				}
 
 				return true
@@ -290,7 +296,13 @@ func (c *serviceContainer) fillService(service any) any {
 			continue
 		}
 
-		field.Set(c.buildService(field.Type()))
+		newService := c.buildService(field.Type())
+
+		if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
+			field.Set(newService)
+		} else {
+			field.Set(newService.Elem())
+		}
 	}
 
 	switch service.(type) {
@@ -319,10 +331,7 @@ func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
 		c.resolvedNum++
 	}
 
-	if _type.Kind() == reflect.Ptr || _type.Kind() == reflect.Interface {
-		return reflect.ValueOf(newService)
-	}
-	return reflect.ValueOf(newService).Elem()
+	return reflect.ValueOf(newService)
 }
 
 func (c *serviceContainer) LoadEnv() {
