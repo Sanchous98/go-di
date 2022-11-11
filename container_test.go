@@ -1,14 +1,13 @@
 package di
 
 import (
-	"bufio"
-	"bytes"
 	"github.com/stretchr/testify/suite"
 	"testing"
 )
 
 type AnotherTestStruct struct {
 	Container Container `inject:""`
+	//CycleDependency *TestStruct `inject:""`
 }
 
 type TestStruct struct {
@@ -76,18 +75,6 @@ func (s *ContainerTestSuite) TestSelfReferences() {
 	s.container.Compile()
 	s.NotNil(testStruct.Container)
 	s.IsType(new(serviceContainer), testStruct.Container)
-}
-
-func (s *ContainerTestSuite) Test_loadEnv() {
-	s.container.(*serviceContainer).loadEnv(bufio.NewReader(bytes.NewReader([]byte("APP_ENV=dev\nDB_NAME=test"))))
-	s.EqualValues("dev", s.container.GetParam("APP_ENV"))
-	s.EqualValues("test", s.container.GetParam("DB_NAME"))
-}
-
-func (s *ContainerTestSuite) TestCompileEvents() {
-	s.container.PreCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
-	s.container.PostCompile(func(event Event) { s.NotNil(event.GetElement()) }, 0)
-	s.container.Compile()
 }
 
 func (s *ContainerTestSuite) TestTagged() {

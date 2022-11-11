@@ -1,14 +1,9 @@
 package di
 
 import (
-	"bufio"
-	"bytes"
-	"errors"
-	"io"
+	"github.com/joho/godotenv"
 	"os"
 	"reflect"
-	"sort"
-	"strings"
 	"sync"
 )
 
@@ -19,40 +14,16 @@ const (
 	envTag = "env"
 )
 
-type CompileEvent struct {
-	BaseEvent
-}
-
-type eventHandlers map[int][]func(Event)
-
-func (eh eventHandlers) Len() int {
-	return len(eh)
-}
-
-func (eh eventHandlers) Swap(i, j int) {
-	eh[i], eh[j] = eh[j], eh[i]
-}
-
-func (eh eventHandlers) Less(i, j int) bool {
-	return i < j
-}
-
 type serviceContainer struct {
 	resolversNum, resolvedNum    int
 	resolvers, resolved, tagsMap sync.Map
-	mu                           sync.RWMutex
+	mu                           sync.Mutex
 	once                         sync.Once
 	params                       map[string]string
-	preCompile                   eventHandlers
-	postCompile                  eventHandlers
 }
 
 func NewContainer() PrecompiledGlobalState {
-	return &serviceContainer{
-		params:      make(map[string]string),
-		preCompile:  make(map[int][]func(Event)),
-		postCompile: make(map[int][]func(Event)),
-	}
+	return &serviceContainer{params: make(map[string]string)}
 }
 
 func (c *serviceContainer) Get(_type any) any {
@@ -62,10 +33,10 @@ func (c *serviceContainer) Get(_type any) any {
 		serviceType = _type
 	default:
 		serviceType = reflect.TypeOf(_type)
+	}
 
-		if serviceType.Kind() == reflect.Ptr {
-			serviceType = serviceType.Elem()
-		}
+	if serviceType.Kind() == reflect.Ptr {
+		serviceType = serviceType.Elem()
 	}
 
 	var resolved, resolver any
@@ -90,10 +61,10 @@ func (c *serviceContainer) Has(_type any) bool {
 		serviceType = _type
 	default:
 		serviceType = reflect.TypeOf(_type)
+	}
 
-		if serviceType.Kind() == reflect.Ptr {
-			serviceType = serviceType.Elem()
-		}
+	if serviceType.Kind() == reflect.Ptr {
+		serviceType = serviceType.Elem()
 	}
 
 	_, ok := c.resolved.Load(serviceType)
@@ -108,7 +79,7 @@ func (c *serviceContainer) Has(_type any) bool {
 }
 
 func (c *serviceContainer) Set(resolver any, tags ...string) {
-	c.mu.RLock()
+	c.mu.Lock()
 
 	typeOf := reflect.TypeOf(resolver)
 
@@ -155,7 +126,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		}
 	}
 	c.resolversNum++
-	c.mu.RUnlock()
+	c.mu.Unlock()
 }
 
 func (c *serviceContainer) All() []any {
@@ -171,30 +142,7 @@ func (c *serviceContainer) All() []any {
 }
 
 func (c *serviceContainer) Compile() {
-	sort.Sort(c.preCompile)
-	sort.Sort(c.postCompile)
-
-	event := &CompileEvent{BaseEvent{element: c}}
-
-	for _, preCompiled := range c.preCompile {
-		for _, preCompile := range preCompiled {
-			if event.CanPropagate() {
-				preCompile(event)
-			}
-		}
-	}
-
 	c.once.Do(c.compile)
-
-	event = &CompileEvent{BaseEvent{element: c}}
-
-	for _, postCompiled := range c.postCompile {
-		for _, postCompile := range postCompiled {
-			if event.CanPropagate() {
-				postCompile(event)
-			}
-		}
-	}
 }
 
 func (c *serviceContainer) compile() {
@@ -247,11 +195,7 @@ func (c *serviceContainer) Destroy() {
 
 // fillService builds a Service using singletons from Container or new instances of another Services
 func (c *serviceContainer) fillService(service any) any {
-	s := reflect.ValueOf(service)
-
-	if s.Kind() == reflect.Ptr {
-		s = s.Elem()
-	}
+	s := reflect.Indirect(reflect.ValueOf(service))
 
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
@@ -335,66 +279,31 @@ func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
 }
 
 func (c *serviceContainer) LoadEnv() {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	for _, envVar := range os.Environ() {
-		env := strings.Split(envVar, "=")
-		c.params[env[0]] = env[1]
-	}
-
-	var err error
-	var dir string
-
-	// LoadEnv common env
-	dir, err = os.Getwd()
-
-	if err != nil {
-		panic(err)
-	}
-
-	defaultEnv, err := os.Open(dir + ".env")
-
-	if err != nil {
-		return
-	}
-
-	defer defaultEnv.Close()
-	c.loadEnv(bufio.NewReader(defaultEnv))
-	env := c.GetParam("APP_ENV")
-
-	if len(env) == 0 {
-		return
-	}
-
-	concreteEnv, err := os.Open(dir + ".env." + env)
-
-	if err != nil {
-		return
-	}
-
-	defer concreteEnv.Close()
-	c.loadEnv(bufio.NewReader(concreteEnv))
+	c.mu.Lock()
+	defer c.mu.Unlock()
 }
 
-func (c *serviceContainer) loadEnv(reader *bufio.Reader) {
-	var envVar []byte
+func (c *serviceContainer) loadEnv(filename string) error {
 	var err error
+	c.params, err = godotenv.Read(filename)
 
-	for {
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		envVar, err = reader.ReadBytes('\n')
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			panic(err)
-		}
-
-		env := bytes.Split(bytes.TrimSpace(envVar), []byte{'='})
-		c.params[string(env[0])] = string(env[1])
+	if err != nil {
+		return err
 	}
+
+	if env, ok := c.params["APP_ENV"]; ok {
+		params, err := godotenv.Read(filename + "." + env)
+
+		if err != nil {
+			return nil
+		}
+
+		for key, value := range params {
+			c.params[key] = value
+		}
+	}
+
+	return nil
 }
 
 func (c *serviceContainer) GetParam(param string) string {
@@ -403,14 +312,6 @@ func (c *serviceContainer) GetParam(param string) string {
 	}
 
 	return c.params[param]
-}
-
-func (c *serviceContainer) PreCompile(handler func(Event), importance int) {
-	c.preCompile[importance] = append(c.preCompile[importance], handler)
-}
-
-func (c *serviceContainer) PostCompile(handler func(Event), importance int) {
-	c.postCompile[importance] = append(c.postCompile[importance], handler)
 }
 
 func inArray[T comparable](needle T, haystack []T) bool {
