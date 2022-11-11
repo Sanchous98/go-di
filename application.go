@@ -1,6 +1,7 @@
 package di
 
 import (
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -48,8 +49,16 @@ func (a *application) Run(loadEnv bool) {
 	}
 
 	select {
-	case <-osSignals:
+	case s := <-osSignals:
+		for _, service := range a.All() {
+			switch service.(type) {
+			case Stoppable:
+				service.(Stoppable).Shutdown()
+			}
+		}
+
 		a.Destroy()
+		log.Printf(`Stopping application because of signal "%s"`, s.String())
 		os.Exit(0)
 	}
 }

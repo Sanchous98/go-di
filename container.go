@@ -176,8 +176,6 @@ func (c *serviceContainer) Destroy() {
 	c.mu.Lock()
 	c.resolved.Range(func(_, resolved any) bool {
 		switch resolved.(type) {
-		case Stoppable:
-			resolved.(Stoppable).Shutdown()
 		case Destructible:
 			resolved.(Destructible).Destructor()
 		}
