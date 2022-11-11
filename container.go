@@ -146,7 +146,6 @@ func (c *serviceContainer) Compile() {
 }
 
 func (c *serviceContainer) compile() {
-	c.LoadEnv()
 	c.mu.Lock()
 	// Self references. Is needed to inject Container as a service
 	c.resolved.Store(reflect.TypeOf(new(Container)).Elem(), c)

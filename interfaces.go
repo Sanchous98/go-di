@@ -18,7 +18,7 @@ type PrecompiledContainer interface {
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
 	AddEntryPoint(func(GlobalState))
-	Run()
+	Run(bool)
 	PrecompiledGlobalState
 }
 

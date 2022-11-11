@@ -27,7 +27,10 @@ func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
 	a.entryPoints = append(a.entryPoints, entryPoint)
 }
 
-func (a *application) Run() {
+func (a *application) Run(loadEnv bool) {
+	if loadEnv {
+		a.LoadEnv()
+	}
 	a.Compile()
 
 	osSignals := make(chan os.Signal)
