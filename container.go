@@ -281,6 +281,10 @@ func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
 func (c *serviceContainer) LoadEnv() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if err := c.loadEnv(".env"); err != nil {
+		panic(err)
+	}
 }
 
 func (c *serviceContainer) loadEnv(filename string) error {
