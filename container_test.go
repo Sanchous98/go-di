@@ -5,10 +5,16 @@ import (
 	"testing"
 )
 
-type AnotherTestStruct struct {
-	Container Container `inject:""`
-	//CycleDependency *TestStruct `inject:""`
+type TestInterface interface {
+	I()
 }
+
+type AnotherTestStruct struct {
+	Container       Container   `inject:""`
+	CycleDependency *TestStruct `inject:""`
+}
+
+func (a *AnotherTestStruct) I() {}
 
 type TestStruct struct {
 	Dependency        *AnotherTestStruct   `inject:""`
@@ -17,6 +23,7 @@ type TestStruct struct {
 	Dependency4       AnotherTestStruct    `inject:""`
 	TaggedDependency  []AnotherTestStruct  `inject:"test_tag"`
 	TaggedDependency2 []*AnotherTestStruct `inject:"test_tag"`
+	TaggedDependency3 []TestInterface      `inject:"test_tag"`
 }
 
 type ContainerTestSuite struct {
@@ -92,6 +99,8 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency) > 0)
 	s.NotNil(testStruct.TaggedDependency2)
 	s.True(len(testStruct.TaggedDependency2) > 0)
+	s.NotNil(testStruct.TaggedDependency3)
+	s.True(len(testStruct.TaggedDependency3) > 0)
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }

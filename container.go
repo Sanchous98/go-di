@@ -7,6 +7,26 @@ import (
 	"sync"
 )
 
+type visitedStack []*any
+
+func (v *visitedStack) Pop() *any {
+	return v.PopFrom(len(*v) - 1)
+}
+
+func (v *visitedStack) PopFrom(i int) *any {
+	if len(*v) == 0 {
+		return nil
+	}
+
+	item := (*v)[i]
+	*v = (*v)[:i]
+	return item
+}
+
+func (v *visitedStack) Push(value *any) {
+	*v = append(*v, value)
+}
+
 const (
 	// Use injectTag to inject dependency into a service
 	injectTag = "inject"
@@ -20,6 +40,7 @@ type serviceContainer struct {
 	mu                           sync.Mutex
 	once                         sync.Once
 	params                       map[string]string
+	currentlyBuilding            visitedStack
 }
 
 func NewContainer() PrecompiledGlobalState {
@@ -107,11 +128,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		}
 
 	} else {
-		value := reflect.ValueOf(resolver)
-
-		if value.Kind() == reflect.Ptr {
-			value = value.Elem()
-		}
+		value := reflect.Indirect(reflect.ValueOf(resolver))
 
 		if value.Kind() != reflect.Struct {
 			panic("Container can receive only Resolver or struct or pointer to struct")
@@ -192,6 +209,8 @@ func (c *serviceContainer) Destroy() {
 
 // fillService builds a Service using singletons from Container or new instances of another Services
 func (c *serviceContainer) fillService(service any) any {
+	c.currentlyBuilding.Push(&service)
+	stackSize := len(c.currentlyBuilding)
 	s := reflect.Indirect(reflect.ValueOf(service))
 
 	for i := 0; i < s.NumField(); i++ {
@@ -221,7 +240,7 @@ func (c *serviceContainer) fillService(service any) any {
 			field.Set(field.Slice(0, 0))
 
 			c.tagsMap.Range(func(_type, tags any) bool {
-				if inArray(tag, tags.([]string)) {
+				if in(tag, tags.([]string)) {
 					newService := c.buildService(_type.(reflect.Type))
 
 					if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
@@ -251,24 +270,32 @@ func (c *serviceContainer) fillService(service any) any {
 		service.(Constructable).Constructor()
 	}
 
+	c.currentlyBuilding = c.currentlyBuilding[:stackSize]
+
 	return service
 }
 
 func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
-	var newService any
-	dependencyType := _type
-
-	if dependencyType.Kind() == reflect.Ptr {
-		dependencyType = dependencyType.Elem()
+	if _type.Kind() == reflect.Ptr {
+		_type = _type.Elem()
 	}
 
-	if c.Has(dependencyType) {
+	for _, service := range c.currentlyBuilding {
+		v := reflect.ValueOf(*service)
+		if reflect.Indirect(v).Type() == _type {
+			return v
+		}
+	}
+
+	var newService any
+
+	if c.Has(_type) {
 		// If service is bound, take it from the container
-		newService = c.Get(dependencyType)
+		newService = c.Get(_type)
 	} else {
-		newService = reflect.New(dependencyType).Interface()
+		newService = reflect.New(_type).Interface()
 		c.fillService(newService)
-		c.resolved.Store(dependencyType, newService)
+		c.resolved.Store(_type, newService)
 		c.resolvedNum++
 	}
 
@@ -315,7 +342,7 @@ func (c *serviceContainer) GetParam(param string) string {
 	return c.params[param]
 }
 
-func inArray[T comparable](needle T, haystack []T) bool {
+func in[T comparable](needle T, haystack []T) bool {
 	for _, item := range haystack {
 		if item == needle {
 			return true
