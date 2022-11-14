@@ -19,8 +19,8 @@ func (a *AnotherTestStruct) I() {}
 type TestStruct struct {
 	Dependency        *AnotherTestStruct   `inject:""`
 	Dependency2       AnotherTestStruct    `inject:""`
-	Dependency3       *AnotherTestStruct   `inject:""`
-	Dependency4       AnotherTestStruct    `inject:""`
+	dependency3       *AnotherTestStruct   `inject:""`
+	dependency4       AnotherTestStruct    `inject:""`
 	TaggedDependency  []AnotherTestStruct  `inject:"test_tag"`
 	TaggedDependency2 []*AnotherTestStruct `inject:"test_tag"`
 	TaggedDependency3 []TestInterface      `inject:"test_tag"`
@@ -38,8 +38,8 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 		testStruct := new(TestStruct)
 		testStruct.Dependency = cntr.Get(testStruct.Dependency).(*AnotherTestStruct)
 		testStruct.Dependency2 = *cntr.Get(testStruct.Dependency2).(*AnotherTestStruct)
-		testStruct.Dependency3 = cntr.Get(testStruct.Dependency3).(*AnotherTestStruct)
-		testStruct.Dependency4 = *cntr.Get(testStruct.Dependency4).(*AnotherTestStruct)
+		testStruct.dependency3 = cntr.Get(testStruct.dependency3).(*AnotherTestStruct)
+		testStruct.dependency4 = *cntr.Get(testStruct.dependency4).(*AnotherTestStruct)
 
 		return testStruct
 	})
@@ -48,8 +48,8 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
-	s.NotNil(testStruct.Dependency3)
-	s.NotNil(testStruct.Dependency4)
+	s.NotNil(testStruct.dependency3)
+	s.NotNil(testStruct.dependency4)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
@@ -60,8 +60,8 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
-	s.NotNil(testStruct.Dependency3)
-	s.NotNil(testStruct.Dependency4)
+	s.NotNil(testStruct.dependency3)
+	s.NotNil(testStruct.dependency4)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
@@ -72,8 +72,8 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
-	s.NotNil(testStruct.Dependency3)
-	s.NotNil(testStruct.Dependency4)
+	s.NotNil(testStruct.dependency3)
+	s.NotNil(testStruct.dependency4)
 }
 
 func (s *ContainerTestSuite) TestSelfReferences() {
@@ -93,8 +93,8 @@ func (s *ContainerTestSuite) TestTagged() {
 
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
-	s.NotNil(testStruct.Dependency3)
-	s.NotNil(testStruct.Dependency4)
+	s.NotNil(testStruct.dependency3)
+	s.NotNil(testStruct.dependency4)
 	s.NotNil(testStruct.TaggedDependency)
 	s.True(len(testStruct.TaggedDependency) > 0)
 	s.NotNil(testStruct.TaggedDependency2)

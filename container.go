@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"unsafe"
 )
 
 type visitedStack []*any
@@ -216,9 +217,11 @@ func (c *serviceContainer) fillService(service any) any {
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
 		envVar, ok := tags.Lookup(envTag)
+		field := s.Field(i)
+		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 
 		if ok {
-			s.Field(i).Set(reflect.ValueOf(c.params[envVar]))
+			field.Set(reflect.ValueOf(c.params[envVar]))
 			continue
 		}
 
@@ -227,8 +230,6 @@ func (c *serviceContainer) fillService(service any) any {
 		if !ok {
 			continue
 		}
-
-		field := s.Field(i)
 
 		if len(tag) > 0 {
 			if field.Type().Kind() != reflect.Slice {
