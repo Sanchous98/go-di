@@ -4,6 +4,7 @@ import (
 	"github.com/joho/godotenv"
 	"os"
 	"reflect"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -186,7 +187,8 @@ func (c *serviceContainer) compile() {
 
 		return true
 	})
-
+	c.currentlyBuilding = nil
+	runtime.GC()
 	c.mu.Unlock()
 }
 
