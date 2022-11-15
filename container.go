@@ -227,7 +227,7 @@ func (c *serviceContainer) fillService(service any) any {
 		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 
 		if ok {
-			field.Set(reflect.ValueOf(c.params[envVar]))
+			field.Set(reflect.ValueOf(c.GetParam(envVar)))
 			continue
 		}
 
