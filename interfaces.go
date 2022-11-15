@@ -3,6 +3,7 @@ package di
 // Container handles services and fills them
 type Container interface {
 	Set(any, ...string)
+	Build(any) any
 	Has(any) bool
 	Get(any) any
 	All() []any

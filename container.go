@@ -137,7 +137,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		}
 
 		c.resolvers.Store(value.Type(), func(Container) any {
-			return c.fillService(resolver)
+			return c.Build(resolver)
 		})
 
 		if len(tags) > 0 {
@@ -208,6 +208,10 @@ func (c *serviceContainer) Destroy() {
 	c.resolvedNum = 0
 	c.resolversNum = 0
 	c.mu.Unlock()
+}
+
+func (c *serviceContainer) Build(service any) any {
+	return c.fillService(service)
 }
 
 // fillService builds a Service using singletons from Container or new instances of another Services
