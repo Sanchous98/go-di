@@ -107,9 +107,10 @@ func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
 
 func BenchmarkServiceContainer_Compile(b *testing.B) {
 	b.ReportAllocs()
+	container := NewContainer()
 
 	for i := 0; i < b.N; i++ {
-		container := NewContainer()
 		container.Compile()
+		container.Destroy()
 	}
 }

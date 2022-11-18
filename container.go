@@ -4,10 +4,25 @@ import (
 	"github.com/goccy/go-reflect"
 	"github.com/joho/godotenv"
 	"os"
-	"runtime"
 	"sync"
 	"unsafe"
 )
+
+func typeIndirect(p reflect.Type) reflect.Type {
+	if p.Kind() == reflect.Ptr {
+		return p.Elem()
+	}
+
+	return p
+}
+
+func typeId(p reflect.Type) uintptr {
+	return uintptr(unsafe.Pointer(p))
+}
+
+func idType(p uintptr) reflect.Type {
+	return reflect.Type(unsafe.Pointer(p))
+}
 
 type visitedStack []*any
 
@@ -37,29 +52,32 @@ const (
 )
 
 type serviceContainer struct {
-	resolversNum, resolvedNum    int
-	resolvers, resolved, tagsMap sync.Map
-	mu                           sync.Mutex
-	once                         sync.Once
-	params                       map[string]string
-	currentlyBuilding            visitedStack
+	resolversNum, resolvedNum int
+	mu                        sync.Mutex
+	once                      sync.Once
+	params                    map[string]string
+	currentlyBuilding         visitedStack
+
+	tagsMap   sync.Map
+	resolved  sync.Map
+	resolvers sync.Map
 }
 
 func NewContainer() PrecompiledGlobalState {
-	return &serviceContainer{params: make(map[string]string)}
+	return &serviceContainer{
+		params: make(map[string]string),
+	}
 }
 
 func (c *serviceContainer) Get(_type any) any {
-	var serviceType reflect.Type
+	var serviceType uintptr
 	switch _type := _type.(type) {
-	case reflect.Type:
+	case uintptr:
 		serviceType = _type
+	case reflect.Type:
+		serviceType = typeId(typeIndirect(_type))
 	default:
-		serviceType = reflect.TypeOf(_type)
-	}
-
-	if serviceType.Kind() == reflect.Ptr {
-		serviceType = serviceType.Elem()
+		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
 	}
 
 	var resolved, resolver any
@@ -70,7 +88,7 @@ func (c *serviceContainer) Get(_type any) any {
 			return nil
 		}
 
-		c.resolved.Store(serviceType, reflect.ValueOf(resolver).Call([]reflect.Value{reflect.ValueOf(c)})[0].Interface())
+		c.resolved.Store(serviceType, reflect.ValueNoEscapeOf(resolver).Call([]reflect.Value{reflect.ValueNoEscapeOf(c)})[0].Interface())
 		resolved, _ = c.resolved.Load(serviceType)
 	}
 
@@ -78,16 +96,14 @@ func (c *serviceContainer) Get(_type any) any {
 }
 
 func (c *serviceContainer) Has(_type any) bool {
-	var serviceType reflect.Type
+	var serviceType uintptr
 	switch _type := _type.(type) {
-	case reflect.Type:
+	case uintptr:
 		serviceType = _type
+	case reflect.Type:
+		serviceType = typeId(typeIndirect(_type))
 	default:
-		serviceType = reflect.TypeOf(_type)
-	}
-
-	if serviceType.Kind() == reflect.Ptr {
-		serviceType = serviceType.Elem()
+		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
 	}
 
 	_, ok := c.resolved.Load(serviceType)
@@ -117,11 +133,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 			panic("Resolver receives only Container")
 		}
 
-		returnType := typeOf.Out(0)
-
-		if returnType.Kind() == reflect.Ptr {
-			returnType = returnType.Elem()
-		}
+		returnType := typeId(typeIndirect(typeOf.Out(0)))
 
 		c.resolvers.Store(returnType, resolver)
 
@@ -130,18 +142,18 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		}
 
 	} else {
-		value := reflect.Indirect(reflect.ValueOf(resolver))
+		value := typeIndirect(reflect.TypeOf(resolver))
 
 		if value.Kind() != reflect.Struct {
 			panic("Container can receive only Resolver or struct or pointer to struct")
 		}
 
-		c.resolvers.Store(value.Type(), func(Container) any {
+		c.resolvers.Store(typeId(value), func(Container) any {
 			return c.Build(resolver)
 		})
 
 		if len(tags) > 0 {
-			c.tagsMap.Store(value.Type(), tags)
+			c.tagsMap.Store(typeId(value), tags)
 		}
 	}
 	c.resolversNum++
@@ -167,28 +179,27 @@ func (c *serviceContainer) Compile() {
 func (c *serviceContainer) compile() {
 	c.mu.Lock()
 	// Self references. Is needed to inject Container as a service
-	c.resolved.Store(reflect.TypeOf(new(Container)).Elem(), c)
-	c.resolved.Store(reflect.TypeOf(new(PrecompiledContainer)).Elem(), c)
-	c.resolved.Store(reflect.TypeOf(new(Environment)).Elem(), c)
-	c.resolved.Store(reflect.TypeOf(new(GlobalState)).Elem(), c)
-	c.resolved.Store(reflect.TypeOf(new(PrecompiledGlobalState)).Elem(), c)
+	c.resolved.Store(typeId(reflect.TypeOf(new(Container)).Elem()), c)
+	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledContainer)).Elem()), c)
+	c.resolved.Store(typeId(reflect.TypeOf(new(Environment)).Elem()), c)
+	c.resolved.Store(typeId(reflect.TypeOf(new(GlobalState)).Elem()), c)
+	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), c)
 	c.resolvedNum += 5
 
 	c.resolvers.Range(func(_type, resolver any) bool {
-		resolverValue := reflect.ValueOf(resolver)
+		resolverValue := reflect.ValueNoEscapeOf(resolver)
 		var args []reflect.Value = nil
 
 		if resolverValue.Type().NumIn() > 0 {
-			args = []reflect.Value{reflect.ValueOf(c)}
+			args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
 		}
 
-		c.resolved.Store(_type.(reflect.Type), resolverValue.Call(args)[0].Interface())
+		c.resolved.Store(_type, resolverValue.Call(args)[0].Interface())
 		c.resolvedNum++
 
 		return true
 	})
 	c.currentlyBuilding = nil
-	runtime.GC()
 	c.mu.Unlock()
 }
 
@@ -218,7 +229,7 @@ func (c *serviceContainer) Build(service any) any {
 func (c *serviceContainer) fillService(service any) any {
 	c.currentlyBuilding.Push(&service)
 	stackSize := len(c.currentlyBuilding)
-	s := reflect.Indirect(reflect.ValueOf(service))
+	s := reflect.Indirect(reflect.ValueNoEscapeOf(service))
 
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
@@ -227,7 +238,7 @@ func (c *serviceContainer) fillService(service any) any {
 		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 
 		if ok {
-			field.Set(reflect.ValueOf(c.GetParam(envVar)))
+			field.Set(reflect.ValueNoEscapeOf(c.GetParam(envVar)))
 			continue
 		}
 
@@ -248,7 +259,7 @@ func (c *serviceContainer) fillService(service any) any {
 
 			c.tagsMap.Range(func(_type, tags any) bool {
 				if in(tag, tags.([]string)) {
-					newService := c.buildService(_type.(reflect.Type))
+					newService := c.buildService(_type.(uintptr))
 
 					if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
 						field.Set(reflect.Append(field, newService))
@@ -263,7 +274,7 @@ func (c *serviceContainer) fillService(service any) any {
 			continue
 		}
 
-		newService := c.buildService(field.Type())
+		newService := c.buildService(typeId(typeIndirect(field.Type())))
 
 		if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
 			field.Set(newService)
@@ -282,14 +293,10 @@ func (c *serviceContainer) fillService(service any) any {
 	return service
 }
 
-func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
-	if _type.Kind() == reflect.Ptr {
-		_type = _type.Elem()
-	}
-
+func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 	for _, service := range c.currentlyBuilding {
-		v := reflect.ValueOf(*service)
-		if reflect.Indirect(v).Type() == _type {
+		v := reflect.ValueNoEscapeOf(*service)
+		if typeId(reflect.Indirect(v).Type()) == _type {
 			return v
 		}
 	}
@@ -300,13 +307,12 @@ func (c *serviceContainer) buildService(_type reflect.Type) reflect.Value {
 		// If service is bound, take it from the container
 		newService = c.Get(_type)
 	} else {
-		newService = reflect.New(_type).Interface()
+		newService = reflect.New(idType(_type)).Interface()
 		c.fillService(newService)
-		c.resolved.Store(_type, newService)
 		c.resolvedNum++
 	}
 
-	return reflect.ValueOf(newService)
+	return reflect.ValueNoEscapeOf(newService)
 }
 
 func (c *serviceContainer) LoadEnv() {
