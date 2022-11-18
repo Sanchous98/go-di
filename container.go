@@ -1,9 +1,9 @@
 package di
 
 import (
+	"github.com/goccy/go-reflect"
 	"github.com/joho/godotenv"
 	"os"
-	"reflect"
 	"runtime"
 	"sync"
 	"unsafe"
