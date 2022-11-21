@@ -1,5 +1,7 @@
 package di
 
+import "os"
+
 // Container handles services and fills them
 type Container interface {
 	Set(any, ...string)
@@ -19,7 +21,7 @@ type PrecompiledContainer interface {
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
 	AddEntryPoint(func(GlobalState))
-	Run(bool)
+	Run(func(), func(os.Signal))
 	PrecompiledGlobalState
 }
 

@@ -28,9 +28,9 @@ func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
 	a.entryPoints = append(a.entryPoints, entryPoint)
 }
 
-func (a *application) Run(loadEnv bool) {
-	if loadEnv {
-		a.LoadEnv()
+func (a *application) Run(envLoader func(), exitPoint func(os.Signal)) {
+	if envLoader != nil {
+		envLoader()
 	}
 	a.Compile()
 
@@ -59,6 +59,6 @@ func (a *application) Run(loadEnv bool) {
 
 		a.Destroy()
 		log.Printf(`Stopping application because of signal "%s"`, s.String())
-		os.Exit(0)
+		exitPoint(s)
 	}
 }
