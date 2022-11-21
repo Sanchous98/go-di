@@ -1,26 +1,23 @@
 package di
 
 import (
-	"log"
+	"context"
 	"os"
 	"os/signal"
-	"syscall"
 )
 
-var app Sandbox
+func Application(ctx context.Context) Sandbox {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-func init() {
-	app = &application{PrecompiledGlobalState: NewContainer(), entryPoints: make([]func(GlobalState), 0)}
-	app.Set(Application)
-}
-
-func Application() Sandbox {
-	return app
+	return &application{ctx: ctx, PrecompiledGlobalState: NewContainer(), entryPoints: make([]func(GlobalState), 0)}
 }
 
 // application is a global state for program
 type application struct {
 	PrecompiledGlobalState
+	ctx         context.Context
 	entryPoints []func(GlobalState)
 }
 
@@ -28,19 +25,20 @@ func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
 	a.entryPoints = append(a.entryPoints, entryPoint)
 }
 
-func (a *application) Run(envLoader func(), exitPoint func(os.Signal)) {
+func (a *application) Run(envLoader func()) {
 	if envLoader != nil {
 		envLoader()
 	}
 	a.Compile()
 
-	osSignals := make(chan os.Signal)
-	signal.Notify(osSignals, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	var stop context.CancelFunc
+	a.ctx, stop = signal.NotifyContext(a.ctx, os.Interrupt, os.Kill)
+	defer stop()
 
 	for _, service := range a.PrecompiledGlobalState.All() {
-		switch service := service.(type) {
+		switch service.(type) {
 		case Launchable:
-			go service.Launch()
+			go service.(Launchable).Launch(a.ctx)
 		}
 	}
 
@@ -49,19 +47,12 @@ func (a *application) Run(envLoader func(), exitPoint func(os.Signal)) {
 	}
 
 	select {
-	case s := <-osSignals:
-		for _, service := range a.All() {
+	case <-a.ctx.Done():
+		for _, service := range a.PrecompiledGlobalState.All() {
 			switch service.(type) {
 			case Stoppable:
-				service.(Stoppable).Shutdown()
+				go service.(Stoppable).Shutdown(a.ctx)
 			}
-		}
-
-		a.Destroy()
-		log.Printf(`Stopping application because of signal "%s"`, s.String())
-
-		if exitPoint != nil {
-			exitPoint(s)
 		}
 	}
 }

@@ -1,6 +1,8 @@
 package di
 
-import "os"
+import (
+	"context"
+)
 
 // Container handles services and fills them
 type Container interface {
@@ -21,7 +23,7 @@ type PrecompiledContainer interface {
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
 	AddEntryPoint(func(GlobalState))
-	Run(func(), func(os.Signal))
+	Run(func())
 	PrecompiledGlobalState
 }
 
@@ -60,11 +62,11 @@ type Object interface {
 }
 
 type Launchable interface {
-	Launch()
+	Launch(context.Context)
 }
 
 type Stoppable interface {
-	Shutdown()
+	Shutdown(context.Context)
 }
 
 type Service interface {

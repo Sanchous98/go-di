@@ -44,7 +44,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 		return testStruct
 	})
 	s.container.Set(func(cntr Container) *AnotherTestStruct { return new(AnotherTestStruct) })
-	s.container.Compile()
+	s.Require().NotPanics(s.container.Compile)
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
@@ -56,7 +56,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 func (s *ContainerTestSuite) TestServiceBinding() {
 	s.container.Set(new(TestStruct))
 	s.container.Set(new(AnotherTestStruct))
-	s.container.Compile()
+	s.Require().NotPanics(s.container.Compile)
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
@@ -68,7 +68,7 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 func (s *ContainerTestSuite) TestAutoWiring() {
 	testStruct := new(TestStruct)
 	s.container.Set(testStruct)
-	s.container.Compile()
+	s.Require().NotPanics(s.container.Compile)
 
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
@@ -79,7 +79,7 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 func (s *ContainerTestSuite) TestSelfReferences() {
 	testStruct := new(AnotherTestStruct)
 	s.container.Set(testStruct)
-	s.container.Compile()
+	s.Require().NotPanics(s.container.Compile)
 	s.NotNil(testStruct.Container)
 	s.IsType(new(serviceContainer), testStruct.Container)
 }
@@ -89,7 +89,8 @@ func (s *ContainerTestSuite) TestTagged() {
 	anotherTestStruct := new(AnotherTestStruct)
 	s.container.Set(testStruct)
 	s.container.Set(anotherTestStruct, "test_tag")
-	s.container.Compile()
+
+	s.Require().NotPanics(s.container.Compile)
 
 	s.NotNil(testStruct.Dependency)
 	s.NotNil(testStruct.Dependency2)
