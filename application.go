@@ -59,6 +59,9 @@ func (a *application) Run(envLoader func(), exitPoint func(os.Signal)) {
 
 		a.Destroy()
 		log.Printf(`Stopping application because of signal "%s"`, s.String())
-		exitPoint(s)
+
+		if exitPoint != nil {
+			exitPoint(s)
+		}
 	}
 }
