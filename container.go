@@ -52,15 +52,14 @@ const (
 )
 
 type serviceContainer struct {
-	resolversNum, resolvedNum int
-	mu                        sync.Mutex
-	once                      sync.Once
-	params                    map[string]string
-	currentlyBuilding         visitedStack
+	once sync.Once
 
-	tagsMap   sync.Map
-	resolved  sync.Map
-	resolvers sync.Map
+	mu     sync.Mutex
+	params map[string]string
+
+	currentlyBuilding visitedStack
+
+	tagsMap, resolved, resolvers sync.Map
 }
 
 func NewContainer() PrecompiledGlobalState {
@@ -123,15 +122,15 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 	typeOf := reflect.TypeOf(resolver)
 
 	if typeOf.Kind() == reflect.Func {
-		if typeOf.NumOut() != 1 {
-			panic("Resolver is expected to return 1 value")
-		}
 		if typeOf.NumIn() > 1 {
 			panic("Resolver receives only 1 parameter")
 		}
 		if typeOf.NumIn() == 1 && !typeOf.In(0).Implements(reflect.TypeOf(new(Container)).Elem()) {
 			panic("Resolver receives only Container")
 		}
+		//if typeOf.NumOut() != 1 {
+		// Just run callback if no return values
+		//}
 
 		returnType := typeId(typeIndirect(typeOf.Out(0)))
 
@@ -156,16 +155,21 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 			c.tagsMap.Store(typeId(value), tags)
 		}
 	}
-	c.resolversNum++
 	c.mu.Unlock()
 }
 
 func (c *serviceContainer) All() []any {
-	all := make([]any, 0, c.resolvedNum)
+	var count int
+
+	c.resolved.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+
+	all := make([]any, 0, count)
 
 	c.resolved.Range(func(_, service any) bool {
 		all = append(all, service)
-
 		return true
 	})
 
@@ -184,7 +188,6 @@ func (c *serviceContainer) compile() {
 	c.resolved.Store(typeId(reflect.TypeOf(new(Environment)).Elem()), c)
 	c.resolved.Store(typeId(reflect.TypeOf(new(GlobalState)).Elem()), c)
 	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), c)
-	c.resolvedNum += 5
 
 	c.resolvers.Range(func(_type, resolver any) bool {
 		resolverValue := reflect.ValueNoEscapeOf(resolver)
@@ -194,8 +197,11 @@ func (c *serviceContainer) compile() {
 			args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
 		}
 
-		c.resolved.Store(_type, resolverValue.Call(args)[0].Interface())
-		c.resolvedNum++
+		if resolverValue.Type().NumOut() == 0 {
+			resolverValue.Call(args)
+		} else {
+			c.resolved.Store(_type, resolverValue.Call(args)[0].Interface())
+		}
 
 		return true
 	})
@@ -216,8 +222,6 @@ func (c *serviceContainer) Destroy() {
 
 	c.resolved = sync.Map{}
 	c.once = sync.Once{}
-	c.resolvedNum = 0
-	c.resolversNum = 0
 	c.mu.Unlock()
 }
 
@@ -309,7 +313,6 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 	} else {
 		newService = reflect.New(idType(_type)).Interface()
 		c.fillService(newService)
-		c.resolvedNum++
 	}
 
 	return reflect.ValueNoEscapeOf(newService)

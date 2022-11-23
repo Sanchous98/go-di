@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/goccy/go-reflect v1.2.0
 	github.com/joho/godotenv v1.4.0
-	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/stretchr/testify v1.8.0
 )
 
