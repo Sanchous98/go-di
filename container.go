@@ -134,6 +134,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 			// Just run callback if no return values
 			c.resolvers.Store(c.resolversNum, resolver)
 			c.resolversNum++
+			return
 		}
 
 		returnType := typeId(typeIndirect(typeOf.Out(0)))
@@ -177,7 +178,6 @@ func (c *serviceContainer) Compile() {
 }
 
 func (c *serviceContainer) compile() {
-	c.mu.Lock()
 	// Self references. Is needed to inject Container as a service
 	c.resolved.Store(typeId(reflect.TypeOf(new(Container)).Elem()), c)
 	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledContainer)).Elem()), c)
@@ -204,7 +204,6 @@ func (c *serviceContainer) compile() {
 		return true
 	})
 	c.currentlyBuilding = nil
-	c.mu.Unlock()
 }
 
 func (c *serviceContainer) Destroy() {

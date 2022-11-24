@@ -76,6 +76,18 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 	s.NotNil(testStruct.dependency4)
 }
 
+func (s *ContainerTestSuite) TestCallbacks() {
+	testStruct := new(TestStruct)
+	s.container.Set(testStruct)
+	s.container.Set(func(container Container) {})
+	s.Require().NotPanics(s.container.Compile)
+
+	s.NotNil(testStruct.Dependency)
+	s.NotNil(testStruct.Dependency2)
+	s.NotNil(testStruct.dependency3)
+	s.NotNil(testStruct.dependency4)
+}
+
 func (s *ContainerTestSuite) TestSelfReferences() {
 	testStruct := new(AnotherTestStruct)
 	s.container.Set(testStruct)
