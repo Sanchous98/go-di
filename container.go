@@ -119,6 +119,7 @@ func (c *serviceContainer) Has(_type any) bool {
 
 func (c *serviceContainer) Set(resolver any, tags ...string) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	typeOf := reflect.TypeOf(resolver)
 
@@ -159,7 +160,6 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 			c.tagsMap.Store(typeId(value), tags)
 		}
 	}
-	c.mu.Unlock()
 }
 
 func (c *serviceContainer) All() []any {
