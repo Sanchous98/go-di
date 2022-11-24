@@ -128,9 +128,17 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		if typeOf.NumIn() == 1 && !typeOf.In(0).Implements(reflect.TypeOf(new(Container)).Elem()) {
 			panic("Resolver receives only Container")
 		}
-		//if typeOf.NumOut() != 1 {
-		// Just run callback if no return values
-		//}
+
+		if typeOf.NumOut() == 0 {
+			// Just run callback if no return values
+			var args []reflect.Value = nil
+
+			if typeOf.NumIn() > 0 {
+				args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
+			}
+
+			reflect.ValueNoEscapeOf(resolver).Call(args)
+		}
 
 		returnType := typeId(typeIndirect(typeOf.Out(0)))
 
