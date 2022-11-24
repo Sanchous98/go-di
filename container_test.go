@@ -50,6 +50,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
+	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
 func (s *ContainerTestSuite) TestServiceBinding() {
@@ -61,6 +62,7 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
+	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
 func (s *ContainerTestSuite) TestAutoWiring() {

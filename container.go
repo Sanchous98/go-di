@@ -52,7 +52,8 @@ const (
 )
 
 type serviceContainer struct {
-	once sync.Once
+	resolversNum, resolvedNum int
+	once                      sync.Once
 
 	mu     sync.Mutex
 	params map[string]string
@@ -131,13 +132,8 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 
 		if typeOf.NumOut() == 0 {
 			// Just run callback if no return values
-			var args []reflect.Value = nil
-
-			if typeOf.NumIn() > 0 {
-				args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
-			}
-
-			reflect.ValueNoEscapeOf(resolver).Call(args)
+			c.resolvers.Store(c.resolversNum, resolver)
+			c.resolversNum++
 		}
 
 		returnType := typeId(typeIndirect(typeOf.Out(0)))
@@ -147,7 +143,6 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		if len(tags) > 0 {
 			c.tagsMap.Store(returnType, tags)
 		}
-
 	} else {
 		value := typeIndirect(reflect.TypeOf(resolver))
 
@@ -167,14 +162,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 }
 
 func (c *serviceContainer) All() []any {
-	var count int
-
-	c.resolved.Range(func(_, _ any) bool {
-		count++
-		return true
-	})
-
-	all := make([]any, 0, count)
+	all := make([]any, 0, c.resolvedNum)
 
 	c.resolved.Range(func(_, service any) bool {
 		all = append(all, service)
@@ -196,6 +184,7 @@ func (c *serviceContainer) compile() {
 	c.resolved.Store(typeId(reflect.TypeOf(new(Environment)).Elem()), c)
 	c.resolved.Store(typeId(reflect.TypeOf(new(GlobalState)).Elem()), c)
 	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), c)
+	c.resolvedNum += 5
 
 	c.resolvers.Range(func(_type, resolver any) bool {
 		resolverValue := reflect.ValueNoEscapeOf(resolver)
@@ -209,6 +198,7 @@ func (c *serviceContainer) compile() {
 			resolverValue.Call(args)
 		} else {
 			c.resolved.Store(_type, resolverValue.Call(args)[0].Interface())
+			c.resolvedNum++
 		}
 
 		return true
@@ -230,6 +220,7 @@ func (c *serviceContainer) Destroy() {
 
 	c.resolved = sync.Map{}
 	c.once = sync.Once{}
+	c.resolvedNum = 0
 	c.mu.Unlock()
 }
 
