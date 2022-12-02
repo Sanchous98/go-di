@@ -8,42 +8,6 @@ import (
 	"unsafe"
 )
 
-func typeIndirect(p reflect.Type) reflect.Type {
-	if p.Kind() == reflect.Ptr {
-		return p.Elem()
-	}
-
-	return p
-}
-
-func typeId(p reflect.Type) uintptr {
-	return uintptr(unsafe.Pointer(p))
-}
-
-func idType(p uintptr) reflect.Type {
-	return reflect.Type(unsafe.Pointer(p))
-}
-
-type visitedStack []*any
-
-func (v *visitedStack) Pop() *any {
-	return v.PopFrom(len(*v) - 1)
-}
-
-func (v *visitedStack) PopFrom(i int) *any {
-	if len(*v) == 0 {
-		return nil
-	}
-
-	item := (*v)[i]
-	*v = (*v)[:i]
-	return item
-}
-
-func (v *visitedStack) Push(value *any) {
-	*v = append(*v, value)
-}
-
 const (
 	// Use injectTag to inject dependency into a service
 	injectTag = "inject"
@@ -118,9 +82,6 @@ func (c *serviceContainer) Has(_type any) bool {
 }
 
 func (c *serviceContainer) Set(resolver any, tags ...string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	typeOf := reflect.TypeOf(resolver)
 
 	if typeOf.Kind() == reflect.Func {
@@ -188,7 +149,7 @@ func (c *serviceContainer) compile() {
 
 	c.resolvers.Range(func(_type, resolver any) bool {
 		resolverValue := reflect.ValueNoEscapeOf(resolver)
-		var args []reflect.Value = nil
+		var args []reflect.Value
 
 		if resolverValue.Type().NumIn() > 0 {
 			args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
@@ -207,7 +168,6 @@ func (c *serviceContainer) compile() {
 }
 
 func (c *serviceContainer) Destroy() {
-	c.mu.Lock()
 	c.resolved.Range(func(_, resolved any) bool {
 		switch resolved.(type) {
 		case Destructible:
@@ -220,15 +180,10 @@ func (c *serviceContainer) Destroy() {
 	c.resolved = sync.Map{}
 	c.once = sync.Once{}
 	c.resolvedNum = 0
-	c.mu.Unlock()
 }
 
+// Build builds a Service using singletons from Container or new instances of another Services
 func (c *serviceContainer) Build(service any) any {
-	return c.fillService(service)
-}
-
-// fillService builds a Service using singletons from Container or new instances of another Services
-func (c *serviceContainer) fillService(service any) any {
 	c.currentlyBuilding.Push(&service)
 	stackSize := len(c.currentlyBuilding)
 	s := reflect.Indirect(reflect.ValueNoEscapeOf(service))
@@ -310,7 +265,7 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 		newService = c.Get(_type)
 	} else {
 		newService = reflect.New(idType(_type)).Interface()
-		c.fillService(newService)
+		c.Build(newService)
 	}
 
 	return reflect.ValueNoEscapeOf(newService)
@@ -349,11 +304,50 @@ func (c *serviceContainer) loadEnv(filename string) error {
 }
 
 func (c *serviceContainer) GetParam(param string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if _, ok := c.params[param]; !ok {
 		c.params[param] = os.Getenv(param)
 	}
 
 	return c.params[param]
+}
+
+func typeIndirect(p reflect.Type) reflect.Type {
+	if p.Kind() == reflect.Ptr {
+		return p.Elem()
+	}
+
+	return p
+}
+
+func typeId(p reflect.Type) uintptr {
+	return uintptr(unsafe.Pointer(p))
+}
+
+func idType(p uintptr) reflect.Type {
+	return reflect.Type(unsafe.Pointer(p))
+}
+
+type visitedStack []*any
+
+func (v *visitedStack) Pop() *any {
+	return v.PopFrom(len(*v) - 1)
+}
+
+func (v *visitedStack) PopFrom(i int) *any {
+	if len(*v) == 0 {
+		return nil
+	}
+
+	item := (*v)[i]
+	*v = (*v)[:i]
+	return item
+}
+
+func (v *visitedStack) Push(value *any) {
+	*v = append(*v, value)
 }
 
 func in[T comparable](needle T, haystack []T) bool {

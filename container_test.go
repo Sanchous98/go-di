@@ -121,6 +121,10 @@ func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
 func BenchmarkServiceContainer_Compile(b *testing.B) {
 	b.ReportAllocs()
 	container := NewContainer()
+	//testStruct := new(TestStruct)
+	//anotherTestStruct := new(AnotherTestStruct)
+	//container.Set(testStruct)
+	//container.Set(anotherTestStruct, "test_tag")
 
 	for i := 0; i < b.N; i++ {
 		container.Compile()

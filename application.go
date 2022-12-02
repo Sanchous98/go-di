@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func Application(ctx context.Context) Sandbox {
@@ -32,10 +33,12 @@ func (a *application) Run(envLoader func()) {
 	a.Compile()
 
 	var stop context.CancelFunc
-	a.ctx, stop = signal.NotifyContext(a.ctx, os.Interrupt, os.Kill)
+	a.ctx, stop = signal.NotifyContext(a.ctx, os.Interrupt, os.Kill, syscall.SIGTERM)
 	defer stop()
 
-	for _, service := range a.PrecompiledGlobalState.All() {
+	all := a.PrecompiledGlobalState.All()
+
+	for _, service := range all {
 		switch service.(type) {
 		case Launchable:
 			go service.(Launchable).Launch(a.ctx)
@@ -48,7 +51,7 @@ func (a *application) Run(envLoader func()) {
 
 	select {
 	case <-a.ctx.Done():
-		for _, service := range a.PrecompiledGlobalState.All() {
+		for _, service := range all {
 			switch service.(type) {
 			case Stoppable:
 				go service.(Stoppable).Shutdown(a.ctx)
