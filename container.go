@@ -22,7 +22,7 @@ type serviceContainer struct {
 	mu     sync.Mutex
 	params map[string]string
 
-	currentlyBuilding visitedStack
+	currentlyBuilding visitedStack[any]
 
 	tagsMap, resolved, resolvers sync.Map
 }
@@ -186,7 +186,13 @@ func (c *serviceContainer) Destroy() {
 func (c *serviceContainer) Build(service any) any {
 	c.currentlyBuilding.Push(&service)
 	stackSize := len(c.currentlyBuilding)
-	s := reflect.Indirect(reflect.ValueNoEscapeOf(service))
+	s := reflect.ValueNoEscapeOf(service)
+
+	if s.Type().Kind() == reflect.Interface {
+		panic("Trying to fill interface type")
+	}
+
+	s = reflect.Indirect(s)
 
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
@@ -266,6 +272,8 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 	} else {
 		newService = reflect.New(idType(_type)).Interface()
 		c.Build(newService)
+		c.resolved.Store(_type, newService)
+		c.resolvedNum++
 	}
 
 	return reflect.ValueNoEscapeOf(newService)
@@ -312,50 +320,4 @@ func (c *serviceContainer) GetParam(param string) string {
 	}
 
 	return c.params[param]
-}
-
-func typeIndirect(p reflect.Type) reflect.Type {
-	if p.Kind() == reflect.Ptr {
-		return p.Elem()
-	}
-
-	return p
-}
-
-func typeId(p reflect.Type) uintptr {
-	return uintptr(unsafe.Pointer(p))
-}
-
-func idType(p uintptr) reflect.Type {
-	return reflect.Type(unsafe.Pointer(p))
-}
-
-type visitedStack []*any
-
-func (v *visitedStack) Pop() *any {
-	return v.PopFrom(len(*v) - 1)
-}
-
-func (v *visitedStack) PopFrom(i int) *any {
-	if len(*v) == 0 {
-		return nil
-	}
-
-	item := (*v)[i]
-	*v = (*v)[:i]
-	return item
-}
-
-func (v *visitedStack) Push(value *any) {
-	*v = append(*v, value)
-}
-
-func in[T comparable](needle T, haystack []T) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-
-	return false
 }
