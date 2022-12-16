@@ -1,6 +1,7 @@
 package di
 
 import (
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"testing"
 )
@@ -12,6 +13,14 @@ type TestInterface interface {
 type AnotherTestStruct struct {
 	Container       Container   `inject:""`
 	CycleDependency *TestStruct `inject:""`
+
+	t      *testing.T `inject:""`
+	called bool
+}
+
+func (a *AnotherTestStruct) Constructor() {
+	assert.False(a.t, a.called)
+	a.called = true
 }
 
 func (a *AnotherTestStruct) I() {}
@@ -24,6 +33,14 @@ type TestStruct struct {
 	TaggedDependency  []AnotherTestStruct  `inject:"test_tag"`
 	TaggedDependency2 []*AnotherTestStruct `inject:"test_tag"`
 	TaggedDependency3 []TestInterface      `inject:"test_tag"`
+
+	t      *testing.T
+	called bool
+}
+
+func (t *TestStruct) Constructor() {
+	assert.False(t.t, t.called)
+	t.called = true
 }
 
 type ContainerTestSuite struct {
@@ -31,7 +48,10 @@ type ContainerTestSuite struct {
 	container PrecompiledGlobalState
 }
 
-func (s *ContainerTestSuite) SetupTest() { s.container = NewContainer() }
+func (s *ContainerTestSuite) SetupTest() {
+	s.container = NewContainer()
+	s.container.Set(s.T())
+}
 
 func (s *ContainerTestSuite) TestResolverBinding() {
 	s.container.Set(func(cntr Container) *TestStruct {
@@ -50,7 +70,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(7, s.container.(*serviceContainer).resolvedNum)
+	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
@@ -63,7 +83,7 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(7, s.container.(*serviceContainer).resolvedNum)
+	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
@@ -76,7 +96,7 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(7, s.container.(*serviceContainer).resolvedNum)
+	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 
@@ -118,7 +138,7 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency2) > 0)
 	s.NotNil(testStruct.TaggedDependency3)
 	s.True(len(testStruct.TaggedDependency3) > 0)
-	s.Equal(7, s.container.(*serviceContainer).resolvedNum)
+	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
 }
 

@@ -158,7 +158,14 @@ func (c *serviceContainer) compile() {
 		if resolverValue.Type().NumOut() == 0 {
 			resolverValue.Call(args)
 		} else {
-			c.resolved.Store(_type, resolverValue.Call(args)[0].Interface())
+			resolved := resolverValue.Call(args)[0].Interface()
+
+			switch resolved.(type) {
+			case Constructable:
+				resolved.(Constructable).Constructor()
+			}
+
+			c.resolved.Store(_type, resolved)
 			c.resolvedNum++
 		}
 
@@ -244,11 +251,6 @@ func (c *serviceContainer) Build(service any) any {
 		} else {
 			field.Set(newService.Elem())
 		}
-	}
-
-	switch service.(type) {
-	case Constructable:
-		service.(Constructable).Constructor()
 	}
 
 	c.currentlyBuilding = c.currentlyBuilding[:stackSize]
