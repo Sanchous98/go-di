@@ -1,6 +1,7 @@
 package di
 
 import (
+	"bytes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -36,6 +37,26 @@ type TestStruct struct {
 
 	t      *testing.T
 	called bool
+}
+
+type EnvTestStruct struct {
+	i64        int64      `env:"INT64"`
+	i          int        `env:"INT"`
+	i32        int32      `env:"INT32"`
+	i16        int16      `env:"INT16"`
+	i8         int8       `env:"INT8"`
+	ui64       uint64     `env:"UINT64"`
+	ui         uint       `env:"UINT"`
+	ui32       uint32     `env:"UINT32"`
+	ui16       uint16     `env:"UINT16:-80"`
+	ui8        uint8      `env:"UINT8"`
+	b          byte       `env:"UINT8"`
+	bl         bool       `env:"BOOL"`
+	float64    float64    `env:"FLOAT64"`
+	float32    float32    `env:"FLOAT32"`
+	complex128 complex128 `env:"COMPLEX128"`
+	complex64  complex64  `env:"COMPLEX64"`
+	str        string     `env:"STRING"`
 }
 
 func (t *TestStruct) Constructor() {
@@ -140,6 +161,51 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency3) > 0)
 	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
 	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
+}
+
+func (s *ContainerTestSuite) TestEnvVars() {
+	var testEnv EnvTestStruct
+	s.container.Set(&testEnv)
+
+	var builder bytes.Buffer
+	builder.WriteString("STRING=test\n")
+	builder.WriteString("COMPLEX64=2+3i\n")
+	builder.WriteString("COMPLEX128=3+4i\n")
+	builder.WriteString("FLOAT32=1.25\n")
+	builder.WriteString("FLOAT64=2.5\n")
+	builder.WriteString("BOOL=true\n")
+	builder.WriteString("UINT8=1\n")
+	builder.WriteString("UINT32=1\n")
+	builder.WriteString("UINT=1\n")
+	builder.WriteString("UINT64=1\n")
+	builder.WriteString("INT8=-1\n")
+	builder.WriteString("INT16=-1\n")
+	builder.WriteString("INT32=-1\n")
+	builder.WriteString("INT=-1\n")
+	builder.WriteString("INT64=-1\n")
+
+	s.container.(*serviceContainer).loadEnv(&builder)
+	s.container.Compile()
+
+	s.Equal("test", testEnv.str)
+	s.Equal(complex64(2+3i), testEnv.complex64)
+	s.Equal(complex128(3+4i), testEnv.complex128)
+	s.Equal(float32(1.25), testEnv.float32)
+	s.Equal(float64(2.5), testEnv.float64)
+	s.Equal(true, testEnv.bl)
+	s.Equal(uint8(1), testEnv.ui8)
+	s.Equal(byte(1), testEnv.b)
+	s.Equal(uint16(80), testEnv.ui16)
+	s.Equal(uint32(1), testEnv.ui32)
+	s.Equal(uint(1), testEnv.ui)
+	s.Equal(uint64(1), testEnv.ui64)
+	s.Equal(int8(-1), testEnv.i8)
+	s.Equal(int16(-1), testEnv.i16)
+	s.Equal(int32(-1), testEnv.i32)
+	s.Equal(-1, testEnv.i)
+	s.Equal(int64(-1), testEnv.i64)
+
+	builder.WriteString("UINT16=1\n")
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }

@@ -3,7 +3,10 @@ package di
 import (
 	"github.com/goccy/go-reflect"
 	"github.com/joho/godotenv"
+	"io"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -22,7 +25,7 @@ type serviceContainer struct {
 	mu     sync.Mutex
 	params map[string]string
 
-	currentlyBuilding visitedStack[any]
+	buildingStack visitedStack[any]
 
 	tagsMap, resolved, resolvers sync.Map
 }
@@ -171,7 +174,7 @@ func (c *serviceContainer) compile() {
 
 		return true
 	})
-	c.currentlyBuilding = nil
+	c.buildingStack = nil
 }
 
 func (c *serviceContainer) Destroy() {
@@ -191,8 +194,8 @@ func (c *serviceContainer) Destroy() {
 
 // Build builds a Service using singletons from Container or new instances of another Services
 func (c *serviceContainer) Build(service any) any {
-	c.currentlyBuilding.Push(&service)
-	stackSize := len(c.currentlyBuilding)
+	c.buildingStack.Push(&service)
+	stackSize := len(c.buildingStack)
 	s := reflect.ValueNoEscapeOf(service)
 
 	if s.Type().Kind() == reflect.Interface {
@@ -203,63 +206,74 @@ func (c *serviceContainer) Build(service any) any {
 
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
-		envVar, ok := tags.Lookup(envTag)
 		field := s.Field(i)
 		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 
-		if ok {
-			field.Set(reflect.ValueNoEscapeOf(c.GetParam(envVar)))
-			continue
-		}
+		if nameAndDefault, ok := tags.Lookup(envTag); ok {
+			param := strings.Split(nameAndDefault, ":-")
 
-		tag, ok := tags.Lookup(injectTag)
+			switch len(param) {
+			case 2:
+				envVar, defaultValue := param[0], param[1]
 
-		if !ok {
-			continue
-		}
-
-		if len(tag) > 0 {
-			if field.Type().Kind() != reflect.Slice {
-				panic("tagged field must be slice")
+				if v := c.GetParam(envVar); v != "" {
+					fillEnvVar(field, v)
+				} else {
+					fillEnvVar(field, defaultValue)
+				}
+			case 1:
+				fillEnvVar(field, c.GetParam(param[0]))
+			default:
+				panic("wrong parameter for env tag")
 			}
 
-			field.Set(reflect.MakeSlice(field.Type(), 1, 1))
-			_t := field.Index(0).Type()
-			field.Set(field.Slice(0, 0))
-
-			c.tagsMap.Range(func(_type, tags any) bool {
-				if in(tag, tags.([]string)) {
-					newService := c.buildService(_type.(uintptr))
-
-					if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
-						field.Set(reflect.Append(field, newService))
-					} else {
-						field.Set(reflect.Append(field, newService.Elem()))
-					}
-				}
-
-				return true
-			})
-
 			continue
 		}
 
-		newService := c.buildService(typeId(typeIndirect(field.Type())))
+		if tag, ok := tags.Lookup(injectTag); ok {
+			if len(tag) > 0 {
+				if field.Type().Kind() != reflect.Slice {
+					panic("tagged field must be slice")
+				}
 
-		if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
-			field.Set(newService)
-		} else {
-			field.Set(newService.Elem())
+				field.Set(reflect.MakeSlice(field.Type(), 1, 1))
+				_t := field.Index(0).Type()
+				field.Set(field.Slice(0, 0))
+
+				c.tagsMap.Range(func(_type, tags any) bool {
+					if in(tag, tags.([]string)) {
+						newService := c.buildService(_type.(uintptr))
+
+						if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
+							field.Set(reflect.Append(field, newService))
+						} else {
+							field.Set(reflect.Append(field, newService.Elem()))
+						}
+					}
+
+					return true
+				})
+
+				continue
+			}
+
+			newService := c.buildService(typeId(typeIndirect(field.Type())))
+
+			if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
+				field.Set(newService)
+			} else {
+				field.Set(newService.Elem())
+			}
 		}
 	}
 
-	c.currentlyBuilding = c.currentlyBuilding[:stackSize]
+	c.buildingStack = c.buildingStack[:stackSize]
 
 	return service
 }
 
 func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
-	for _, service := range c.currentlyBuilding {
+	for _, service := range c.buildingStack {
 		v := reflect.ValueNoEscapeOf(*service)
 		if typeId(reflect.Indirect(v).Type()) == _type {
 			return v
@@ -285,21 +299,28 @@ func (c *serviceContainer) LoadEnv() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := c.loadEnv(".env"); err != nil {
+	file, err := os.Open(".env")
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer file.Close()
+
+	if err = c.loadEnv(file); err != nil {
 		panic(err)
 	}
 }
 
-func (c *serviceContainer) loadEnv(filename string) error {
-	var err error
-	c.params, err = godotenv.Read(filename)
+func (c *serviceContainer) loadEnv(file io.Reader) (err error) {
+	c.params, err = godotenv.Parse(file)
 
 	if err != nil {
 		return err
 	}
 
 	if env, ok := c.params["APP_ENV"]; ok {
-		params, err := godotenv.Read(filename + "." + env)
+		params, err := godotenv.Read(".env." + env)
 
 		if err != nil {
 			return nil
@@ -322,4 +343,135 @@ func (c *serviceContainer) GetParam(param string) string {
 	}
 
 	return c.params[param]
+}
+
+func fillEnvVar(field reflect.Value, value string) {
+	switch field.Kind() {
+	case reflect.Ptr:
+		panic("cannot assign to ptr type")
+	case reflect.String:
+		field.Set(reflect.ValueNoEscapeOf(value))
+	case reflect.Int64:
+		v, err := strconv.ParseInt(value, 10, 64)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(v))
+	case reflect.Int:
+		v, err := strconv.ParseInt(value, 10, 0)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(int(v)))
+	case reflect.Int32:
+		v, err := strconv.ParseInt(value, 10, 32)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(int32(v)))
+	case reflect.Int16:
+		v, err := strconv.ParseInt(value, 10, 16)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(int16(v)))
+	case reflect.Int8:
+		v, err := strconv.ParseInt(value, 10, 8)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(int8(v)))
+	case reflect.Uint64:
+		v, err := strconv.ParseUint(value, 10, 64)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(v))
+	case reflect.Uint:
+		v, err := strconv.ParseUint(value, 10, 0)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(uint(v)))
+	case reflect.Uint32:
+		v, err := strconv.ParseUint(value, 10, 32)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(uint32(v)))
+	case reflect.Uint16:
+		v, err := strconv.ParseUint(value, 10, 16)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(uint16(v)))
+	case reflect.Uint8:
+		v, err := strconv.ParseUint(value, 10, 8)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(uint8(v)))
+	case reflect.Float64:
+		v, err := strconv.ParseFloat(value, 64)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(v))
+	case reflect.Float32:
+		v, err := strconv.ParseFloat(value, 64)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(float32(v)))
+	case reflect.Complex128:
+		v, err := strconv.ParseComplex(value, 128)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(v))
+	case reflect.Complex64:
+		v, err := strconv.ParseComplex(value, 64)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(complex64(v)))
+	case reflect.Bool:
+		v, err := strconv.ParseBool(value)
+
+		if err != nil {
+			panic(err)
+		}
+
+		field.Set(reflect.ValueNoEscapeOf(v))
+	default:
+		panic("invalid type for env variable")
+	}
 }
