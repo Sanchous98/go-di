@@ -290,6 +290,11 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 		c.Build(newService)
 		c.resolved.Store(_type, newService)
 		c.resolvedNum++
+
+		switch newService.(type) {
+		case Constructable:
+			newService.(Constructable).Constructor()
+		}
 	}
 
 	return reflect.ValueNoEscapeOf(newService)
