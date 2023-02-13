@@ -208,6 +208,15 @@ func (s *ContainerTestSuite) TestEnvVars() {
 	builder.WriteString("UINT16=1\n")
 }
 
+func (s *ContainerTestSuite) TestBuildRunsConstructor() {
+	s.container.Set(func(container Container) *AnotherTestStruct {
+		return container.Build(new(AnotherTestStruct)).(*AnotherTestStruct)
+	})
+
+	s.container.Compile()
+	s.True(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct).called)
+}
+
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
 
 func BenchmarkServiceContainer_Compile(b *testing.B) {
