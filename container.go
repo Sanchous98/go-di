@@ -55,13 +55,8 @@ func (c *serviceContainer) Get(_type any) any {
 			return nil
 		}
 
-		c.resolved.Store(serviceType, reflect.ValueNoEscapeOf(resolver).Call([]reflect.Value{reflect.ValueNoEscapeOf(c)})[0].Interface())
+		c.executeResolver(serviceType, resolver)
 		resolved, _ = c.resolved.Load(serviceType)
-
-		switch resolved.(type) {
-		case Constructable:
-			resolved.(Constructable).Constructor()
-		}
 	}
 
 	return resolved
@@ -155,31 +150,37 @@ func (c *serviceContainer) compile() {
 	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), c)
 	c.resolvedNum += 5
 
-	c.resolvers.Range(func(_type, resolver any) bool {
-		resolverValue := reflect.ValueNoEscapeOf(resolver)
-		var args []reflect.Value
-
-		if resolverValue.Type().NumIn() > 0 {
-			args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
-		}
-
-		if resolverValue.Type().NumOut() == 0 {
-			resolverValue.Call(args)
-		} else {
-			resolved := resolverValue.Call(args)[0].Interface()
-
-			switch resolved.(type) {
-			case Constructable:
-				resolved.(Constructable).Constructor()
-			}
-
-			c.resolved.Store(_type, resolved)
-			c.resolvedNum++
-		}
-
-		return true
-	})
+	c.resolvers.Range(c.executeResolver)
 	c.buildingStack = nil
+}
+
+func (c *serviceContainer) executeResolver(_type, resolver any) bool {
+	if _, ok := c.resolved.Load(_type); ok {
+		return true
+	}
+
+	resolverValue := reflect.ValueNoEscapeOf(resolver)
+	var args []reflect.Value
+
+	if resolverValue.Type().NumIn() > 0 {
+		args = []reflect.Value{reflect.ValueNoEscapeOf(c)}
+	}
+
+	if resolverValue.Type().NumOut() == 0 {
+		resolverValue.Call(args)
+	} else {
+		resolved := resolverValue.Call(args)[0].Interface()
+
+		switch resolved.(type) {
+		case Constructable:
+			resolved.(Constructable).Constructor()
+		}
+
+		c.resolved.Store(_type, resolved)
+		c.resolvedNum++
+	}
+
+	return true
 }
 
 func (c *serviceContainer) Destroy() {
