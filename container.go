@@ -57,6 +57,11 @@ func (c *serviceContainer) Get(_type any) any {
 
 		c.resolved.Store(serviceType, reflect.ValueNoEscapeOf(resolver).Call([]reflect.Value{reflect.ValueNoEscapeOf(c)})[0].Interface())
 		resolved, _ = c.resolved.Load(serviceType)
+
+		switch resolved.(type) {
+		case Constructable:
+			resolved.(Constructable).Constructor()
+		}
 	}
 
 	return resolved
