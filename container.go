@@ -210,6 +210,11 @@ func (c *serviceContainer) Build(service any) any {
 
 	s = reflect.Indirect(s)
 
+	if s.Kind() == reflect.Interface {
+		// Nothing to build in interface
+		return service
+	}
+
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
 		field := s.Field(i)
