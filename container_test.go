@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+type TestInterfaceValue struct {
+	Test TestInterface `inject:""`
+}
+
 type TestInterface interface {
 	I()
 }
@@ -215,6 +219,11 @@ func (s *ContainerTestSuite) TestBuildRunsConstructor() {
 
 	s.container.Compile()
 	s.True(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct).called)
+}
+
+func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
+	s.container.Set(new(TestInterfaceValue))
+	s.NotPanics(s.container.Compile)
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }

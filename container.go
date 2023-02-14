@@ -210,11 +210,6 @@ func (c *serviceContainer) Build(service any) any {
 
 	s = reflect.Indirect(s)
 
-	if s.Kind() == reflect.Interface {
-		// Nothing to build in interface
-		return service
-	}
-
 	for i := 0; i < s.NumField(); i++ {
 		tags := s.Type().Field(i).Tag
 		field := s.Field(i)
@@ -298,6 +293,11 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 		newService = c.Get(_type)
 	} else {
 		newService = reflect.New(idType(_type)).Interface()
+
+		if idType(_type).Kind() == reflect.Interface {
+			return reflect.ValueNoEscapeOf(newService).Elem()
+		}
+
 		c.Build(newService)
 		c.resolved.Store(_type, newService)
 		c.resolvedNum++
