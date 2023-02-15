@@ -19,15 +19,18 @@ const (
 )
 
 type serviceContainer struct {
-	resolversNum, resolvedNum int
-	once                      sync.Once
+	resolversNum int
+	once         sync.Once
 
 	mu     sync.Mutex
 	params map[string]string
 
 	buildingStack visitedStack[any]
 
-	tagsMap, resolved, resolvers sync.Map
+	tagsMap, resolvers sync.Map
+
+	resolvedTypeMap sync.Map
+	resolved        []any
 }
 
 func NewContainer() PrecompiledGlobalState {
@@ -47,19 +50,17 @@ func (c *serviceContainer) Get(_type any) any {
 		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
 	}
 
-	var resolved, resolver any
-	var ok bool
-
-	if resolved, ok = c.resolved.Load(serviceType); !ok {
-		if resolver, ok = c.resolvers.Load(serviceType); !ok {
-			return nil
-		}
-
-		c.executeResolver(serviceType, resolver)
-		resolved, _ = c.resolved.Load(serviceType)
+	if i, ok := c.resolvedTypeMap.Load(serviceType); ok {
+		return c.resolved[i.(int)]
 	}
 
-	return resolved
+	if resolver, ok := c.resolvers.Load(serviceType); ok {
+		c.executeResolver(serviceType, resolver)
+		i, _ := c.resolvedTypeMap.Load(serviceType)
+		return c.resolved[i.(int)]
+	}
+
+	return nil
 }
 
 func (c *serviceContainer) Has(_type any) bool {
@@ -73,7 +74,7 @@ func (c *serviceContainer) Has(_type any) bool {
 		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
 	}
 
-	_, ok := c.resolved.Load(serviceType)
+	_, ok := c.resolvedTypeMap.Load(serviceType)
 
 	if ok {
 		return true
@@ -127,12 +128,8 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 }
 
 func (c *serviceContainer) All() []any {
-	all := make([]any, 0, c.resolvedNum)
-
-	c.resolved.Range(func(_, service any) bool {
-		all = append(all, service)
-		return true
-	})
+	all := make([]any, len(c.resolved))
+	copy(all, c.resolved)
 
 	return all
 }
@@ -143,19 +140,20 @@ func (c *serviceContainer) Compile() {
 
 func (c *serviceContainer) compile() {
 	// Self references. Is needed to inject Container as a service
-	c.resolved.Store(typeId(reflect.TypeOf(new(Container)).Elem()), c)
-	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledContainer)).Elem()), c)
-	c.resolved.Store(typeId(reflect.TypeOf(new(Environment)).Elem()), c)
-	c.resolved.Store(typeId(reflect.TypeOf(new(GlobalState)).Elem()), c)
-	c.resolved.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), c)
-	c.resolvedNum += 5
+	c.resolved = append(c.resolved, c)
+
+	c.resolvedTypeMap.Store(typeId(reflect.TypeOf(new(Container)).Elem()), len(c.resolved)-1)
+	c.resolvedTypeMap.Store(typeId(reflect.TypeOf(new(PrecompiledContainer)).Elem()), len(c.resolved)-1)
+	c.resolvedTypeMap.Store(typeId(reflect.TypeOf(new(Environment)).Elem()), len(c.resolved)-1)
+	c.resolvedTypeMap.Store(typeId(reflect.TypeOf(new(GlobalState)).Elem()), len(c.resolved)-1)
+	c.resolvedTypeMap.Store(typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()), len(c.resolved)-1)
 
 	c.resolvers.Range(c.executeResolver)
 	c.buildingStack = nil
 }
 
 func (c *serviceContainer) executeResolver(_type, resolver any) bool {
-	if _, ok := c.resolved.Load(_type); ok {
+	if _, ok := c.resolvedTypeMap.Load(_type); ok {
 		return true
 	}
 
@@ -176,26 +174,24 @@ func (c *serviceContainer) executeResolver(_type, resolver any) bool {
 			resolved.(Constructable).Constructor()
 		}
 
-		c.resolved.Store(_type, resolved)
-		c.resolvedNum++
+		c.resolved = append(c.resolved, resolved)
+		c.resolvedTypeMap.Store(_type, len(c.resolved)-1)
 	}
 
 	return true
 }
 
 func (c *serviceContainer) Destroy() {
-	c.resolved.Range(func(_, resolved any) bool {
+	for _, resolved := range c.resolved {
 		switch resolved.(type) {
 		case Destructible:
 			resolved.(Destructible).Destructor()
 		}
+	}
 
-		return true
-	})
-
-	c.resolved = sync.Map{}
+	c.resolved = c.resolved[:0]
+	c.resolvedTypeMap = sync.Map{}
 	c.once = sync.Once{}
-	c.resolvedNum = 0
 }
 
 // Build builds a Service using singletons from Container or new instances of another Services
@@ -299,8 +295,8 @@ func (c *serviceContainer) buildService(_type uintptr) reflect.Value {
 		}
 
 		c.Build(newService)
-		c.resolved.Store(_type, newService)
-		c.resolvedNum++
+		c.resolved = append(c.resolved, newService)
+		c.resolvedTypeMap.Store(_type, len(c.resolved)-1)
 
 		switch newService.(type) {
 		case Constructable:

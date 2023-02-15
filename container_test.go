@@ -95,8 +95,8 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
-	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
+	s.Len(s.container.(*serviceContainer).resolved, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
 }
 
 func (s *ContainerTestSuite) TestServiceBinding() {
@@ -108,8 +108,8 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
-	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
+	s.Len(s.container.(*serviceContainer).resolved, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
 }
 
 func (s *ContainerTestSuite) TestAutoWiring() {
@@ -121,8 +121,8 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
-	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
+	s.Len(s.container.(*serviceContainer).resolved, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
 }
 
 func (s *ContainerTestSuite) TestCallbacks() {
@@ -163,8 +163,8 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency2) > 0)
 	s.NotNil(testStruct.TaggedDependency3)
 	s.True(len(testStruct.TaggedDependency3) > 0)
-	s.Equal(8, s.container.(*serviceContainer).resolvedNum)
-	s.Len(s.container.All(), s.container.(*serviceContainer).resolvedNum)
+	s.Len(s.container.(*serviceContainer).resolved, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
 }
 
 func (s *ContainerTestSuite) TestEnvVars() {
