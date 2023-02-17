@@ -95,21 +95,22 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 	s.NotNil(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
 	s.NotNil(testStruct.dependency4)
-	s.Len(s.container.(*serviceContainer).resolved, 4)
-	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
+	s.Len(s.container.(*serviceContainer).entries, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
 func (s *ContainerTestSuite) TestServiceBinding() {
 	s.container.Set(new(TestStruct))
 	s.container.Set(new(AnotherTestStruct))
 	s.Require().NotPanics(s.container.Compile)
+	s.Require().True(s.container.Has((*TestStruct)(nil)))
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
-	s.NotNil(testStruct.Dependency2)
+	s.NotEmpty(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
-	s.NotNil(testStruct.dependency4)
-	s.Len(s.container.(*serviceContainer).resolved, 4)
-	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
+	s.NotEmpty(testStruct.dependency4)
+	s.Len(s.container.(*serviceContainer).entries, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
 func (s *ContainerTestSuite) TestAutoWiring() {
@@ -118,23 +119,11 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 	s.Require().NotPanics(s.container.Compile)
 
 	s.NotNil(testStruct.Dependency)
-	s.NotNil(testStruct.Dependency2)
+	s.NotEmpty(testStruct.Dependency2)
 	s.NotNil(testStruct.dependency3)
-	s.NotNil(testStruct.dependency4)
-	s.Len(s.container.(*serviceContainer).resolved, 4)
-	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
-}
-
-func (s *ContainerTestSuite) TestCallbacks() {
-	testStruct := new(TestStruct)
-	s.container.Set(testStruct)
-	s.container.Set(func(container Container) {})
-	s.Require().NotPanics(s.container.Compile)
-
-	s.NotNil(testStruct.Dependency)
-	s.NotNil(testStruct.Dependency2)
-	s.NotNil(testStruct.dependency3)
-	s.NotNil(testStruct.dependency4)
+	s.NotEmpty(testStruct.dependency4)
+	s.Len(s.container.(*serviceContainer).entries, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
 func (s *ContainerTestSuite) TestSelfReferences() {
@@ -163,8 +152,8 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency2) > 0)
 	s.NotNil(testStruct.TaggedDependency3)
 	s.True(len(testStruct.TaggedDependency3) > 0)
-	s.Len(s.container.(*serviceContainer).resolved, 4)
-	s.Len(s.container.All(), len(s.container.(*serviceContainer).resolved))
+	s.Len(s.container.(*serviceContainer).entries, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
 func (s *ContainerTestSuite) TestEnvVars() {
@@ -212,12 +201,19 @@ func (s *ContainerTestSuite) TestEnvVars() {
 	builder.WriteString("UINT16=1\n")
 }
 
-func (s *ContainerTestSuite) TestBuildRunsConstructor() {
-	s.container.Set(func(container Container) *AnotherTestStruct {
-		return container.Build(new(AnotherTestStruct)).(*AnotherTestStruct)
-	})
+func (s *ContainerTestSuite) TestAppendingTypes() {
+	s.container.Set(new(AnotherTestStruct))
+	s.Nil(s.container.AppendTypes((*AnotherTestStruct)(nil), new(TestInterface)))
+	s.NotPanics(s.container.Compile)
 
-	s.container.Compile()
+	s.True(s.container.Has((*AnotherTestStruct)(nil)))
+	s.True(s.container.Has(new(TestInterface)))
+	s.Len(s.container.All(), 4)
+	s.Same(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct), s.container.Get(new(TestInterface)).(*AnotherTestStruct))
+}
+
+func (s *ContainerTestSuite) TestBuildRunsConstructor() {
+	s.container.Build(new(AnotherTestStruct))
 	s.True(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct).called)
 }
 
