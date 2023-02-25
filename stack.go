@@ -1,12 +1,12 @@
 package di
 
-type visitedStack[T any] []*T
+type visitedStack []*entry
 
-func (v *visitedStack[T]) Pop() *T {
+func (v *visitedStack) Pop() *entry {
 	return v.PopFrom(len(*v) - 1)
 }
 
-func (v *visitedStack[T]) PopFrom(i int) *T {
+func (v *visitedStack) PopFrom(i int) *entry {
 	if len(*v) == 0 {
 		return nil
 	}
@@ -16,6 +16,6 @@ func (v *visitedStack[T]) PopFrom(i int) *T {
 	return item
 }
 
-func (v *visitedStack[T]) Push(value *T) {
+func (v *visitedStack) Push(value *entry) {
 	*v = append(*v, value)
 }

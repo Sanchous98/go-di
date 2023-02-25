@@ -224,13 +224,30 @@ func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
 
+type benchTestStruct struct {
+	Dependency        *benchAnotherTestStruct   `inject:""`
+	Dependency2       benchAnotherTestStruct    `inject:""`
+	dependency3       *benchAnotherTestStruct   `inject:""`
+	dependency4       benchAnotherTestStruct    `inject:""`
+	TaggedDependency  []benchAnotherTestStruct  `inject:"test_tag"`
+	TaggedDependency2 []*benchAnotherTestStruct `inject:"test_tag"`
+	TaggedDependency3 []TestInterface           `inject:"test_tag"`
+}
+
+type benchAnotherTestStruct struct {
+	Container       Container        `inject:""`
+	CycleDependency *benchTestStruct `inject:""`
+}
+
+func (b *benchAnotherTestStruct) I() {}
+
 func BenchmarkServiceContainer_Compile(b *testing.B) {
 	b.ReportAllocs()
 	container := NewContainer()
-	//testStruct := new(TestStruct)
-	//anotherTestStruct := new(AnotherTestStruct)
-	//container.Set(testStruct)
-	//container.Set(anotherTestStruct, "test_tag")
+	testStruct := new(benchTestStruct)
+	anotherTestStruct := new(benchAnotherTestStruct)
+	container.Set(testStruct)
+	container.Set(anotherTestStruct, "test_tag")
 
 	for i := 0; i < b.N; i++ {
 		container.Compile()

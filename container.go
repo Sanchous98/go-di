@@ -2,11 +2,11 @@ package di
 
 import (
 	"errors"
+	"github.com/Sanchous98/go-di/sync"
 	"github.com/goccy/go-reflect"
 	"github.com/joho/godotenv"
 	"io"
 	"os"
-	"sync"
 )
 
 const (
@@ -23,9 +23,9 @@ type serviceContainer struct {
 	once         sync.Once
 
 	mu     sync.Mutex
-	params sync.Map
+	params sync.Map[string, string]
 
-	buildingStack visitedStack[entry]
+	buildingStack visitedStack
 	entries       []*entry
 }
 
@@ -240,7 +240,7 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 	}
 
 	if env, ok := c.params.Load("APP_ENV"); ok {
-		params, err = godotenv.Read(".env." + env.(string))
+		params, err = godotenv.Read(".env." + env)
 
 		if err != nil {
 			return nil
@@ -256,7 +256,7 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 
 func (c *serviceContainer) GetParam(param string) string {
 	p, _ := c.params.LoadOrStore(param, os.Getenv(param))
-	return p.(string)
+	return p
 }
 
 func validateFunc(typeOf reflect.Type) {

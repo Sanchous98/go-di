@@ -20,13 +20,3 @@ func typeId(p reflect.Type) uintptr {
 func idType(p uintptr) reflect.Type {
 	return reflect.Type(unsafe.Pointer(p))
 }
-
-func in[T comparable](needle T, haystack []T) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-
-	return false
-}
