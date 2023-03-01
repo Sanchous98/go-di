@@ -8,7 +8,7 @@ import (
 type Container interface {
 	// Set defines new entry in container
 	Set(any, ...string)
-	// Build sets new entry in container and immediately builds it
+	// Build sets new entry in container without adding it to container
 	Build(any) any
 	// AppendTypes adds referenced types to an existing entry. Returns error if
 	AppendTypes(any, ...any) error

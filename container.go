@@ -194,9 +194,7 @@ func (c *serviceContainer) compile() {
 }
 
 func (c *serviceContainer) Build(service any) any {
-	c.entries = append(c.entries, defaultEntry(service))
-
-	if s := c.Get(service); s != nil {
+	if s := defaultEntry(service).Build(c); s != nil {
 		return s
 	}
 
