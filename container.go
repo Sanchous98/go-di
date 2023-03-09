@@ -253,7 +253,11 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 }
 
 func (c *serviceContainer) GetParam(param string) string {
-	p, _ := c.params.LoadOrStore(param, os.Getenv(param))
+	if p, loaded := c.params.LoadOrStore(param, os.Getenv(param)); loaded {
+		return p
+	}
+
+	p, _ := c.params.Load(param)
 	return p
 }
 
