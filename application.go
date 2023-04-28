@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
@@ -51,11 +52,16 @@ func (a *application) Run(envLoader func()) {
 
 	select {
 	case <-a.ctx.Done():
+		var wg sync.WaitGroup
+
 		for _, service := range all {
 			switch service.(type) {
 			case Stoppable:
+				wg.Add(1)
 				go service.(Stoppable).Shutdown(a.ctx)
 			}
 		}
+
+		wg.Wait()
 	}
 }
