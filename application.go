@@ -34,7 +34,7 @@ func (a *application) Run(envLoader func()) {
 	a.Compile()
 
 	var stop context.CancelFunc
-	a.ctx, stop = signal.NotifyContext(a.ctx, os.Interrupt, os.Kill, syscall.SIGTERM)
+	a.ctx, stop = signal.NotifyContext(context.WithValue(a.ctx, "container", a.PrecompiledGlobalState), os.Interrupt, os.Kill, syscall.SIGTERM)
 	defer stop()
 
 	all := a.PrecompiledGlobalState.All()
