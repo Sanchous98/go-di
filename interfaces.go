@@ -62,21 +62,10 @@ type Destructible interface {
 	Destructor()
 }
 
-// Object is a Constructable and Destructible service
-type Object interface {
-	Constructable
-	Destructible
-}
-
 type Launchable interface {
 	Launch(context.Context)
 }
 
 type Stoppable interface {
 	Shutdown(context.Context)
-}
-
-type Service interface {
-	Launchable
-	Stoppable
 }

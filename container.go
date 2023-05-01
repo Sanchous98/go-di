@@ -7,6 +7,7 @@ import (
 	"github.com/joho/godotenv"
 	"io"
 	"os"
+	"sync/atomic"
 )
 
 const (
@@ -19,8 +20,7 @@ const (
 var EntryNotFound = errors.New("entry not found")
 
 type serviceContainer struct {
-	resolversNum int
-	once         sync.Once
+	build atomic.Bool
 
 	mu     sync.Mutex
 	params sync.Map[string, string]
@@ -32,15 +32,7 @@ type serviceContainer struct {
 func NewContainer() PrecompiledGlobalState { return new(serviceContainer) }
 
 func (c *serviceContainer) Get(_type any) any {
-	var serviceType uintptr
-	switch _type.(type) {
-	case uintptr:
-		serviceType = _type.(uintptr)
-	case reflect.Type:
-		serviceType = typeId(typeIndirect(_type.(reflect.Type)))
-	default:
-		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
-	}
+	serviceType := valueTypeId(_type)
 
 	for _, e := range c.buildingStack {
 		if e.TypeOf(serviceType) {
@@ -58,15 +50,7 @@ func (c *serviceContainer) Get(_type any) any {
 }
 
 func (c *serviceContainer) Has(_type any) bool {
-	var serviceType uintptr
-	switch _type := _type.(type) {
-	case uintptr:
-		serviceType = _type
-	case reflect.Type:
-		serviceType = typeId(typeIndirect(_type))
-	default:
-		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
-	}
+	serviceType := valueTypeId(_type)
 
 	for _, e := range c.entries {
 		if e.TypeOf(serviceType) {
@@ -84,7 +68,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		validateFunc(typeOf)
 
 		c.entries = append(c.entries, &entry{
-			types: []uintptr{typeId(typeIndirect(typeOf.Out(0)))},
+			types: []uintptr{valueTypeId(typeOf.Out(0))},
 			resolver: func(*serviceContainer) any {
 				return reflect.ValueNoEscapeOf(resolver).Call([]reflect.Value{reflect.ValueNoEscapeOf(c)})[0].Interface()
 			},
@@ -117,27 +101,12 @@ func (c *serviceContainer) AppendTypes(entryType any, appendTypes ...any) error 
 		return EntryNotFound
 	}
 
-	var serviceType uintptr
-	switch entryType.(type) {
-	case uintptr:
-		serviceType = entryType.(uintptr)
-	case reflect.Type:
-		serviceType = typeId(typeIndirect(entryType.(reflect.Type)))
-	default:
-		serviceType = typeId(typeIndirect(reflect.TypeOf(entryType)))
-	}
+	serviceType := valueTypeId(entryType)
 
 	for _, e := range c.buildingStack {
 		if e.TypeOf(serviceType) {
 			for _, appendType := range appendTypes {
-				switch entryType.(type) {
-				case uintptr:
-					e.AddType(appendType.(uintptr))
-				case reflect.Type:
-					e.AddType(typeId(typeIndirect(appendType.(reflect.Type))))
-				default:
-					e.AddType(typeId(typeIndirect(reflect.TypeOf(appendType))))
-				}
+				e.AddType(valueTypeId(appendType))
 			}
 		}
 	}
@@ -145,14 +114,7 @@ func (c *serviceContainer) AppendTypes(entryType any, appendTypes ...any) error 
 	for _, e := range c.entries {
 		if e.TypeOf(serviceType) {
 			for _, appendType := range appendTypes {
-				switch entryType.(type) {
-				case uintptr:
-					e.AddType(appendType.(uintptr))
-				case reflect.Type:
-					e.AddType(typeId(typeIndirect(appendType.(reflect.Type))))
-				default:
-					e.AddType(typeId(typeIndirect(reflect.TypeOf(appendType))))
-				}
+				e.AddType(valueTypeId(appendType))
 			}
 		}
 	}
@@ -170,18 +132,20 @@ func (c *serviceContainer) All() []any {
 }
 
 func (c *serviceContainer) Compile() {
-	c.once.Do(c.compile)
+	if c.build.CompareAndSwap(false, true) {
+		c.compile()
+	}
 }
 
 func (c *serviceContainer) compile() {
 	// Self references. Is needed to inject Container as a service
 	c.entries = append(c.entries, &entry{
 		types: []uintptr{
-			typeId(reflect.TypeOf(new(Container)).Elem()),
-			typeId(reflect.TypeOf(new(PrecompiledContainer)).Elem()),
-			typeId(reflect.TypeOf(new(Environment)).Elem()),
-			typeId(reflect.TypeOf(new(GlobalState)).Elem()),
-			typeId(reflect.TypeOf(new(PrecompiledGlobalState)).Elem()),
+			valueTypeId(new(Container)),
+			valueTypeId(new(PrecompiledContainer)),
+			valueTypeId(new(Environment)),
+			valueTypeId(new(GlobalState)),
+			valueTypeId(new(PrecompiledGlobalState)),
 		},
 		resolver: func(*serviceContainer) any { return c },
 	})
@@ -206,7 +170,7 @@ func (c *serviceContainer) Destroy() {
 		e.Destroy()
 	}
 
-	c.once = sync.Once{}
+	c.build.Store(false)
 }
 
 func (c *serviceContainer) LoadEnv() {
@@ -263,7 +227,7 @@ func (c *serviceContainer) GetParam(param string) string {
 
 func validateFunc(typeOf reflect.Type) {
 	if typeOf.Kind() != reflect.Func {
-		panic("misuse ov validateFunc")
+		panic("misuse of validateFunc")
 	}
 
 	if typeOf.NumIn() > 1 {

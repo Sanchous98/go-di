@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"runtime/pprof"
 	"testing"
 )
 
@@ -242,15 +246,26 @@ type benchAnotherTestStruct struct {
 func (b *benchAnotherTestStruct) I() {}
 
 func BenchmarkServiceContainer_Compile(b *testing.B) {
+	debug.SetGCPercent(-1)
+	memprofile := "pprof"
+	f, _ := os.Create(memprofile)
+
 	b.ReportAllocs()
 	container := NewContainer()
-	testStruct := new(benchTestStruct)
-	anotherTestStruct := new(benchAnotherTestStruct)
-	container.Set(testStruct)
-	container.Set(anotherTestStruct, "test_tag")
+
+	for i := 0; i < 100; i++ {
+		testStruct := new(benchTestStruct)
+		anotherTestStruct := new(benchAnotherTestStruct)
+		container.Set(testStruct)
+		container.Set(anotherTestStruct, "test_tag")
+	}
 
 	for i := 0; i < b.N; i++ {
 		container.Compile()
 		container.Destroy()
 	}
+
+	runtime.GC() // get up-to-date statistics
+	pprof.WriteHeapProfile(f)
+	f.Close()
 }

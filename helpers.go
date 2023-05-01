@@ -17,6 +17,15 @@ func typeId(p reflect.Type) uintptr {
 	return uintptr(unsafe.Pointer(p))
 }
 
-func idType(p uintptr) reflect.Type {
-	return reflect.Type(unsafe.Pointer(p))
+func valueTypeId(_type any) (serviceType uintptr) {
+	switch _type.(type) {
+	case uintptr:
+		serviceType = _type.(uintptr)
+	case reflect.Type:
+		serviceType = typeId(typeIndirect(_type.(reflect.Type)))
+	default:
+		serviceType = typeId(typeIndirect(reflect.TypeOf(_type)))
+	}
+
+	return
 }

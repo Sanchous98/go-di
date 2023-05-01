@@ -4,7 +4,7 @@ import (
 	"github.com/goccy/go-reflect"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -14,12 +14,11 @@ type entry struct {
 	types    []uintptr
 	tags     []string
 
-	buildOnce    sync.Once
-	waitBuilding sync.Mutex
+	built atomic.Bool
 }
 
 func defaultEntry(service any) *entry {
-	e := &entry{types: []uintptr{typeId(typeIndirect(reflect.TypeOf(service)))}}
+	e := &entry{types: []uintptr{valueTypeId(service)}}
 	e.resolver = func(c *serviceContainer) any { return defaultBuilder(e, service, c) }
 
 	return e
@@ -54,17 +53,17 @@ func (e *entry) Build(c *serviceContainer) any {
 	}
 
 	c.buildingStack.Push(e)
-	stackSize := len(c.buildingStack)
 
-	e.buildOnce.Do(func() {
+	if e.built.CompareAndSwap(false, true) {
 		e.resolved = e.resolver(c)
 
 		switch e.resolved.(type) {
 		case Constructable:
 			e.resolved.(Constructable).Constructor()
 		}
-	})
-	c.buildingStack = c.buildingStack[:stackSize-1]
+	}
+
+	c.buildingStack = c.buildingStack[:len(c.buildingStack)-1]
 
 	return e.resolved
 }
@@ -75,7 +74,7 @@ func (e *entry) Destroy() {
 		e.resolved.(Destructible).Destructor()
 	}
 	e.resolved = nil
-	e.buildOnce = sync.Once{}
+	e.built.Store(false)
 }
 
 func defaultBuilder(e *entry, service any, c *serviceContainer) any {
@@ -119,17 +118,26 @@ func defaultBuilder(e *entry, service any, c *serviceContainer) any {
 					panic("tagged field must be slice")
 				}
 
-				field.Set(reflect.MakeSlice(field.Type(), 1, 1))
-				_t := field.Index(0).Type()
-				field.Set(field.Slice(0, 0))
-
+				var count int
 				for _, item := range c.entries {
 					if item.HasTag(tag) {
-						newService := reflect.ValueNoEscapeOf(item.Build(c))
-						if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
-							field.Set(reflect.Append(field, newService))
-						} else {
-							field.Set(reflect.Append(field, newService.Elem()))
+						count++
+					}
+				}
+
+				if count > 0 {
+					var j int
+					field.Set(reflect.MakeSlice(field.Type(), count, count))
+					_t := field.Type().Elem()
+
+					for _, item := range c.entries {
+						if item.HasTag(tag) {
+							if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
+								field.Index(j).Set(reflect.ValueNoEscapeOf(item.Build(c)))
+							} else {
+								field.Index(j).Set(reflect.ValueNoEscapeOf(item.Build(c)).Elem())
+							}
+							j++
 						}
 					}
 				}
@@ -137,26 +145,23 @@ func defaultBuilder(e *entry, service any, c *serviceContainer) any {
 				continue
 			}
 
-			var newService any
-
-			if !c.Has(typeId(typeIndirect(field.Type()))) {
-
+			if !c.Has(field.Type()) {
 				item := &entry{
-					types: []uintptr{typeId(typeIndirect(field.Type()))},
+					types: []uintptr{valueTypeId(field.Type())},
 				}
 				item.resolver = func(c *serviceContainer) any {
-					newService = reflect.New(idType(typeId(typeIndirect(field.Type())))).Interface()
+					newService := reflect.New(typeIndirect(field.Type()))
 
 					if field.Type().Kind() == reflect.Interface {
-						return reflect.ValueNoEscapeOf(newService).Elem().Interface()
+						return newService.Elem().Interface()
 					}
 
-					return defaultBuilder(item, newService, c)
+					return defaultBuilder(item, newService.Interface(), c)
 				}
 				c.entries = append(c.entries, item)
 			}
 
-			newService = c.Get(typeId(typeIndirect(field.Type())))
+			newService := c.Get(field.Type())
 
 			if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
 				if newService != nil {
