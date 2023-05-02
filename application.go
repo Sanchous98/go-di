@@ -58,10 +58,10 @@ func (a *application) Run(envLoader func()) {
 			switch service.(type) {
 			case Stoppable:
 				wg.Add(1)
-				go func() {
-					service.(Stoppable).Shutdown(a.ctx)
+				go func(service Stoppable) {
+					service.Shutdown(a.ctx)
 					wg.Done()
-				}()
+				}(service.(Stoppable))
 			}
 		}
 
