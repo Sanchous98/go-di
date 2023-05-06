@@ -16,6 +16,8 @@ type Container interface {
 	Has(any) bool
 	// Get returns service from container
 	Get(any) any
+	// GetByTag returns tagged services from container
+	GetByTag(string) []any
 	// All return all services
 	All() []any
 }

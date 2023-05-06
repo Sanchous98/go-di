@@ -49,6 +49,24 @@ func (c *serviceContainer) Get(_type any) any {
 	return nil
 }
 
+func (c *serviceContainer) GetByTag(tag string) []any {
+	byTag := make([]any, 0)
+
+	for _, e := range c.buildingStack {
+		if e.HasTag(tag) {
+			byTag = append(byTag, e.Build(c))
+		}
+	}
+
+	for _, e := range c.entries {
+		if e.HasTag(tag) {
+			byTag = append(byTag, e.Build(c))
+		}
+	}
+
+	return byTag
+}
+
 func (c *serviceContainer) Has(_type any) bool {
 	serviceType := valueTypeId(_type)
 

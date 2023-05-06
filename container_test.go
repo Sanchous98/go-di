@@ -160,6 +160,17 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
+func (s *ContainerTestSuite) TestGetByTag() {
+	for i := 0; i < 10; i++ {
+		anotherTestStruct := new(AnotherTestStruct)
+		s.container.Set(anotherTestStruct, "test_tag")
+	}
+
+	s.Require().NotPanics(s.container.Compile)
+
+	s.Len(s.container.GetByTag("test_tag"), 10)
+}
+
 func (s *ContainerTestSuite) TestEnvVars() {
 	var testEnv EnvTestStruct
 	s.container.Set(&testEnv)
