@@ -1,10 +1,10 @@
 package di
 
 import (
+	"github.com/Sanchous98/go-di/sync"
 	"github.com/goccy/go-reflect"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -14,7 +14,7 @@ type entry struct {
 	types    []uintptr
 	tags     []string
 
-	built atomic.Bool
+	buildOnce sync.Once
 }
 
 func defaultEntry(service any) *entry {
@@ -54,14 +54,14 @@ func (e *entry) Build(c *serviceContainer) any {
 
 	c.buildingStack.Push(e)
 
-	if e.built.CompareAndSwap(false, true) {
+	e.buildOnce.Do(func() {
 		e.resolved = e.resolver(c)
 
 		switch e.resolved.(type) {
 		case Constructable:
 			e.resolved.(Constructable).Constructor()
 		}
-	}
+	})
 
 	c.buildingStack = c.buildingStack[:len(c.buildingStack)-1]
 
@@ -74,7 +74,7 @@ func (e *entry) Destroy() {
 		e.resolved.(Destructible).Destructor()
 	}
 	e.resolved = nil
-	e.built.Store(false)
+	e.buildOnce = sync.Once{}
 }
 
 func defaultBuilder(e *entry, service any, c *serviceContainer) any {
