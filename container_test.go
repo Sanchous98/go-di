@@ -228,13 +228,30 @@ func (s *ContainerTestSuite) TestAppendingTypes() {
 }
 
 func (s *ContainerTestSuite) TestBuildRunsConstructor() {
+	s.container.Set(func(c Container) Container {
+		return s.container
+	})
 	s.container.Build(new(AnotherTestStruct))
 	s.True(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct).called)
 }
 
 func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
 	s.container.Set(new(TestInterfaceValue))
-	s.NotPanics(s.container.Compile)
+	s.PanicsWithError(
+		`interface type without bound value. Remove "inject" tag or set a value, bound by this interface type`,
+		s.container.Compile,
+	)
+}
+
+func (s *ContainerTestSuite) TestCallbackServiceNotNil() {
+	s.container.Set(func(c Container) TestInterface {
+		return c.Build(new(AnotherTestStruct)).(TestInterface)
+	})
+	s.container.Set(new(TestInterfaceValue))
+	s.container.Compile()
+
+	t := s.container.Get((*TestInterfaceValue)(nil)).(*TestInterfaceValue)
+	s.NotNil(t.Test)
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
