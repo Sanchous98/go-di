@@ -1,10 +1,10 @@
 package di
 
 import (
-	"github.com/Sanchous98/go-di/sync"
 	"github.com/goccy/go-reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -13,8 +13,7 @@ type entry struct {
 	resolver func(*serviceContainer) any
 	types    []uintptr
 	tags     []string
-
-	buildOnce sync.Once
+	built    uint32
 }
 
 func defaultEntry(service any) *entry {
@@ -54,14 +53,14 @@ func (e *entry) Build(c *serviceContainer) any {
 
 	c.buildingStack.Push(e)
 
-	e.buildOnce.Do(func() {
+	if atomic.CompareAndSwapUint32(&e.built, 0, 1) {
 		e.resolved = e.resolver(c)
 
 		switch e.resolved.(type) {
 		case Constructable:
 			e.resolved.(Constructable).Constructor()
 		}
-	})
+	}
 
 	c.buildingStack = c.buildingStack[:len(c.buildingStack)-1]
 
@@ -74,7 +73,7 @@ func (e *entry) Destroy() {
 		e.resolved.(Destructible).Destructor()
 	}
 	e.resolved = nil
-	e.buildOnce = sync.Once{}
+	atomic.StoreUint32(&e.built, 0)
 }
 
 func defaultBuilder(e *entry, service any, c *serviceContainer) any {
@@ -163,11 +162,16 @@ func defaultBuilder(e *entry, service any, c *serviceContainer) any {
 
 			newService := c.Get(field.Type())
 
-			if field.Type().Kind() == reflect.Ptr || field.Type().Kind() == reflect.Interface {
-				if newService != nil {
-					field.Set(reflect.ValueNoEscapeOf(newService))
+			switch field.Type().Kind() {
+			case reflect.Interface:
+				if newService == nil {
+					panic(`interface type without bound value. Remove "inject" tag or set a value, bound by this interface type`)
 				}
-			} else {
+
+				fallthrough
+			case reflect.Ptr:
+				field.Set(reflect.ValueNoEscapeOf(newService))
+			default:
 				field.Set(reflect.ValueNoEscapeOf(newService).Elem())
 			}
 		}
