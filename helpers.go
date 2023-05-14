@@ -1,7 +1,7 @@
 package di
 
 import (
-	"github.com/goccy/go-reflect"
+	"reflect"
 	"unsafe"
 )
 
@@ -14,7 +14,7 @@ func typeIndirect(p reflect.Type) reflect.Type {
 }
 
 func typeId(p reflect.Type) uintptr {
-	return uintptr(unsafe.Pointer(p))
+	return (*[2]uintptr)(unsafe.Pointer(&p))[1]
 }
 
 func valueTypeId(_type any) (serviceType uintptr) {

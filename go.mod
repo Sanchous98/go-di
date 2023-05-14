@@ -3,9 +3,9 @@ module github.com/Sanchous98/go-di
 go 1.20
 
 require (
-	github.com/goccy/go-reflect v1.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.8.2
+	golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea
 )
 
 require (

@@ -2,11 +2,11 @@ package di
 
 import (
 	"errors"
-	"github.com/Sanchous98/go-di/sync"
-	"github.com/goccy/go-reflect"
 	"github.com/joho/godotenv"
 	"io"
 	"os"
+	"reflect"
+	"sync"
 	"sync/atomic"
 )
 
@@ -22,8 +22,8 @@ var EntryNotFound = errors.New("entry not found")
 type serviceContainer struct {
 	build atomic.Bool
 
-	mu     sync.Mutex
-	params sync.Map[string, string]
+	mu     sync.RWMutex
+	params map[string]string
 
 	buildingStack visitedStack
 	entries       []*entry
@@ -88,7 +88,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		c.entries = append(c.entries, &entry{
 			types: []uintptr{valueTypeId(typeOf.Out(0))},
 			resolver: func(*serviceContainer) any {
-				return reflect.ValueNoEscapeOf(resolver).Call([]reflect.Value{reflect.ValueNoEscapeOf(c)})[0].Interface()
+				return reflect.ValueOf(resolver).Call([]reflect.Value{reflect.ValueOf(c)})[0].Interface()
 			},
 			tags: tags,
 		})
@@ -215,11 +215,15 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 		return err
 	}
 
-	for param, value := range params {
-		c.params.Store(param, value)
+	if c.params == nil {
+		c.params = make(map[string]string, len(params))
 	}
 
-	if env, ok := c.params.Load("APP_ENV"); ok {
+	for param, value := range params {
+		c.params[param] = value
+	}
+
+	if env, ok := c.params["APP_ENV"]; ok {
 		params, err = godotenv.Read(".env." + env)
 
 		if err != nil {
@@ -227,7 +231,7 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 		}
 
 		for key, value := range params {
-			c.params.Store(key, value)
+			c.params[key] = value
 		}
 	}
 
@@ -235,12 +239,15 @@ func (c *serviceContainer) loadEnv(file io.Reader) error {
 }
 
 func (c *serviceContainer) GetParam(param string) string {
-	if p, loaded := c.params.LoadOrStore(param, os.Getenv(param)); loaded {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if p, loaded := c.params[param]; loaded {
 		return p
 	}
 
-	p, _ := c.params.Load(param)
-	return p
+	c.params[param] = os.Getenv(param)
+	return c.params[param]
 }
 
 func validateFunc(typeOf reflect.Type) {
