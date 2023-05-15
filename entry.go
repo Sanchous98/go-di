@@ -136,9 +136,9 @@ func defaultBuilder(e *entry, service any, c *serviceContainer) any {
 					for _, item := range c.entries {
 						if item.HasTag(tag) {
 							if _t.Kind() == reflect.Ptr || _t.Kind() == reflect.Interface {
-								abi.SliceFromRV(field).SetAt(j, reflect.ValueOf(item.Build(c)))
+								field.Index(j).Set(reflect.ValueOf(item.Build(c)))
 							} else {
-								abi.SliceFromRV(field).SetAt(j, reflect.ValueOf(item.Build(c)).Elem())
+								field.Index(j).Set(reflect.ValueOf(item.Build(c)).Elem())
 							}
 							j++
 						}

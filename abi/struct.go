@@ -5,6 +5,8 @@ import (
 	"unsafe"
 )
 
+const intSizeBytes = (32 << (^uint(0) >> 63)) / 8
+
 type StructField struct {
 	name   name    // name is always non-empty
 	_      uintptr // type of field

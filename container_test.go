@@ -152,6 +152,9 @@ func (s *ContainerTestSuite) TestTagged() {
 	s.True(len(testStruct.TaggedDependency2) > 0)
 	s.NotNil(testStruct.TaggedDependency3)
 	s.True(len(testStruct.TaggedDependency3) > 0)
+	s.NotPanics(func() {
+		testStruct.TaggedDependency3[0].I()
+	})
 	s.Len(s.container.(*serviceContainer).entries, 4)
 	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
