@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"reflect"
 	"sync"
 	"syscall"
 )
@@ -19,18 +20,37 @@ func Application(ctx context.Context) Sandbox {
 // application is a global state for program
 type application struct {
 	PrecompiledGlobalState
-	ctx         context.Context
-	entryPoints []func(GlobalState)
+	ctx           context.Context
+	beforeCompile []func()
+	entryPoints   []func(GlobalState)
 }
 
 func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
 	a.entryPoints = append(a.entryPoints, entryPoint)
 }
 
+func (a *application) Set(service any, tags ...string) {
+	_t := reflect.TypeOf(service)
+
+	if _t.Kind() == reflect.Func && _t.NumOut() == 0 {
+		a.beforeCompile = append(a.beforeCompile, func() {
+			reflect.ValueOf(service).Call([]reflect.Value{reflect.ValueOf(a)})
+		})
+		return
+	}
+
+	a.PrecompiledGlobalState.Set(service, tags...)
+}
+
 func (a *application) Run(envLoader func()) {
 	if envLoader != nil {
 		envLoader()
 	}
+
+	for _, f := range a.beforeCompile {
+		f()
+	}
+
 	a.Compile()
 
 	var stop context.CancelFunc
