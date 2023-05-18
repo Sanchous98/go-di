@@ -246,6 +246,9 @@ func (c *serviceContainer) GetParam(param string) string {
 		return p
 	}
 
+	if c.params == nil {
+		c.params = make(map[string]string, 1)
+	}
 	c.params[param] = os.Getenv(param)
 	return c.params[param]
 }
