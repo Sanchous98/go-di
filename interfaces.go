@@ -29,29 +29,9 @@ type PrecompiledContainer interface {
 	Container
 }
 
-// Sandbox runs a entryPoints function with a global state in form of Container
-type Sandbox interface {
-	AddEntryPoint(func(GlobalState))
-	Run(context.Context, func())
-	PrecompiledGlobalState
-}
-
-// Environment handles .env vars
-type Environment interface {
-	LoadEnv()
-	GetParam(string) string
-}
-
-// GlobalState is represented by Container and Environment
-type GlobalState interface {
-	Container
-	Environment
-}
-
-// PrecompiledGlobalState is a GlobalState with PrecompiledContainer
-type PrecompiledGlobalState interface {
+type Runner interface {
 	PrecompiledContainer
-	Environment
+	Run(context.Context)
 }
 
 // Constructable is a service that has special method that initializes it

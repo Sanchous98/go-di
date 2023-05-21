@@ -2,19 +2,13 @@ package di
 
 import (
 	"errors"
-	"github.com/joho/godotenv"
-	"io"
-	"os"
 	"reflect"
-	"sync"
 	"sync/atomic"
 )
 
 const (
 	// Use injectTag to inject dependency into a service
 	injectTag = "inject"
-	// Use envTag to inject environment variable
-	envTag = "env"
 )
 
 var EntryNotFound = errors.New("entry not found")
@@ -22,14 +16,11 @@ var EntryNotFound = errors.New("entry not found")
 type serviceContainer struct {
 	build atomic.Bool
 
-	mu     sync.RWMutex
-	params map[string]string
-
 	buildingStack visitedStack
 	entries       []*entry
 }
 
-func NewContainer() PrecompiledGlobalState { return new(serviceContainer) }
+func NewContainer() PrecompiledContainer { return new(serviceContainer) }
 
 func (c *serviceContainer) Get(_type any) any {
 	serviceType := valueTypeId(_type)
@@ -161,9 +152,6 @@ func (c *serviceContainer) compile() {
 		types: []uintptr{
 			valueTypeId(new(Container)),
 			valueTypeId(new(PrecompiledContainer)),
-			valueTypeId(new(Environment)),
-			valueTypeId(new(GlobalState)),
-			valueTypeId(new(PrecompiledGlobalState)),
 		},
 		resolver: func(*serviceContainer) any { return c },
 	})
@@ -189,68 +177,6 @@ func (c *serviceContainer) Destroy() {
 	}
 
 	c.build.Store(false)
-}
-
-func (c *serviceContainer) LoadEnv() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	file, err := os.Open(".env")
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer file.Close()
-
-	if err = c.loadEnv(file); err != nil {
-		panic(err)
-	}
-}
-
-func (c *serviceContainer) loadEnv(file io.Reader) error {
-	params, err := godotenv.Parse(file)
-
-	if err != nil {
-		return err
-	}
-
-	if c.params == nil {
-		c.params = make(map[string]string, len(params))
-	}
-
-	for param, value := range params {
-		c.params[param] = value
-	}
-
-	if env, ok := c.params["APP_ENV"]; ok {
-		params, err = godotenv.Read(".env." + env)
-
-		if err != nil {
-			return nil
-		}
-
-		for key, value := range params {
-			c.params[key] = value
-		}
-	}
-
-	return nil
-}
-
-func (c *serviceContainer) GetParam(param string) string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if p, loaded := c.params[param]; loaded {
-		return p
-	}
-
-	if c.params == nil {
-		c.params = make(map[string]string, 1)
-	}
-	c.params[param] = os.Getenv(param)
-	return c.params[param]
 }
 
 func validateFunc(typeOf reflect.Type) {

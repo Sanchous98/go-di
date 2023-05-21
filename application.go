@@ -9,20 +9,19 @@ import (
 	"syscall"
 )
 
-func NewApplication() Sandbox {
-	return &application{PrecompiledGlobalState: NewContainer(), entryPoints: make([]func(GlobalState), 0)}
+func NewApplication(name string) Runner {
+	return &application{name: name, PrecompiledContainer: new(serviceContainer)}
 }
 
 // application is a global state for program
 type application struct {
-	PrecompiledGlobalState
+	PrecompiledContainer
+
+	name          string
 	beforeCompile []func()
-	entryPoints   []func(GlobalState)
 }
 
-func (a *application) AddEntryPoint(entryPoint func(GlobalState)) {
-	a.entryPoints = append(a.entryPoints, entryPoint)
-}
+func (a *application) Name() string { return a.name }
 
 func (a *application) Set(service any, tags ...string) {
 	_t := reflect.TypeOf(service)
@@ -34,14 +33,10 @@ func (a *application) Set(service any, tags ...string) {
 		return
 	}
 
-	a.PrecompiledGlobalState.Set(service, tags...)
+	a.PrecompiledContainer.Set(service, tags...)
 }
 
-func (a *application) Run(ctx context.Context, envLoader func()) {
-	if envLoader != nil {
-		envLoader()
-	}
-
+func (a *application) Run(ctx context.Context) {
 	for _, f := range a.beforeCompile {
 		f()
 	}
@@ -49,20 +44,16 @@ func (a *application) Run(ctx context.Context, envLoader func()) {
 	a.Compile()
 
 	var stop context.CancelFunc
-	ctx, stop = signal.NotifyContext(context.WithValue(ctx, "container", a.PrecompiledGlobalState), os.Interrupt, os.Kill, syscall.SIGTERM)
+	ctx, stop = signal.NotifyContext(context.WithValue(ctx, "container", a.PrecompiledContainer), os.Interrupt, os.Kill, syscall.SIGTERM)
 	defer stop()
 
-	all := a.PrecompiledGlobalState.All()
+	all := a.PrecompiledContainer.All()
 
 	for _, service := range all {
 		switch service.(type) {
 		case Launchable:
 			go service.(Launchable).Launch(ctx)
 		}
-	}
-
-	for _, entryPoint := range a.entryPoints {
-		go entryPoint(a.PrecompiledGlobalState)
 	}
 
 	select {
