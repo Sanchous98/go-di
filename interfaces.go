@@ -32,7 +32,7 @@ type PrecompiledContainer interface {
 // Sandbox runs a entryPoints function with a global state in form of Container
 type Sandbox interface {
 	AddEntryPoint(func(GlobalState))
-	Run(func())
+	Run(context.Context, func())
 	PrecompiledGlobalState
 }
 
