@@ -31,6 +31,7 @@ type PrecompiledContainer interface {
 
 type Runner interface {
 	PrecompiledContainer
+	Name() string
 	Run(context.Context)
 }
 
