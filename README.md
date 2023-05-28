@@ -42,9 +42,6 @@ container.Get((*ExampleService)(nil)).(*ExampleService) // Returns *ExampleServi
 3. Leave as it is. In this case container will also resolve your service, but only as a dependency for other services.
    Useful for libraries.
 
-The default implementation of container, provided by library is a global state. It also handler environment variables.
-You can build your application, working in a sandbox.
-
 
 
 Services can have default steps to self initialize and self destroy. To use this feature, implement Constructable and
