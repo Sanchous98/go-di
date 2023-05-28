@@ -24,7 +24,7 @@ There are some ways container can compile a service:
    the container. It's better to use interface, you need, because of LSP
 
 ```go
-container.Set(func () *ExampleInterfaceType {
+container.Set(func (di.Container) *ExampleInterfaceType {
     return &ExampleService{} 
 })
 container.Get((*ExampleInterfaceType)(nil)).(*ExampleInterfaceType) // Returns *ExampleService
@@ -45,12 +45,7 @@ container.Get((*ExampleService)(nil)).(*ExampleService) // Returns *ExampleServi
 The default implementation of container, provided by library is a global state. It also handler environment variables.
 You can build your application, working in a sandbox.
 
-```go
-di.Application().SetEntryPoints(func (container GlobalState) {
-    ...
-})
-di.Application().Run()
-```
+
 
 Services can have default steps to self initialize and self destroy. To use this feature, implement Constructable and
 Destructible interfaces. It's useful for graceful shutdown feature.
@@ -70,11 +65,11 @@ gracefully.
 
 ```go
 type Launchable interface {
-    Launch()
+    Launch(context.Context)
 }
 
 type Stoppable interface {
-    Shutdown()
+    Shutdown(context.Context)
 }
 ```
 
