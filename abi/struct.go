@@ -5,22 +5,21 @@ import (
 	"unsafe"
 )
 
-const intSizeBytes = (32 << (^uint(0) >> 63)) / 8
+const intSizeBytes = (32 << (^uint(0) >> 63)) >> 3
 
 type StructField struct {
-	name   name    // name is always non-empty
-	_      uintptr // type of field
-	offset uintptr // byte offset of field
+	name      name    // name is always non-empty
+	_, offset uintptr // byte offset of field
 }
 
 func (s *StructField) Name() string { return s.name.name() }
 
 func (s *StructField) Tag() reflect.StructTag {
-	if s.name.hasTag() {
-		return reflect.StructTag(s.name.tag())
+	if !s.name.hasTag() {
+		return ""
 	}
 
-	return ""
+	return reflect.StructTag(s.name.tag())
 }
 
 type Struct struct {
@@ -51,7 +50,7 @@ func (n name) data(off int, _ string) *byte {
 }
 
 func (n name) hasTag() bool {
-	return (*n.bytes)&(1<<1) != 0
+	return (*n.bytes)&2 != 0
 }
 
 func (n name) readVarint(off int) (int, int) {
