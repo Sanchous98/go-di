@@ -78,7 +78,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 
 		c.entries = append(c.entries, &entry{
 			types: []uintptr{valueTypeId(typeOf.Out(0))},
-			resolver: func(*serviceContainer) any {
+			resolver: func(c *serviceContainer) any {
 				return reflect.ValueOf(resolver).Call([]reflect.Value{reflect.ValueOf(c)})[0].Interface()
 			},
 			tags: tags,
@@ -153,7 +153,7 @@ func (c *serviceContainer) compile() {
 			valueTypeId(new(Container)),
 			valueTypeId(new(PrecompiledContainer)),
 		},
-		resolver: func(*serviceContainer) any { return c },
+		resolver: func(c *serviceContainer) any { return c },
 	})
 
 	for _, e := range c.entries {
