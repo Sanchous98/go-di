@@ -87,7 +87,7 @@ func (c *serviceContainer) Set(resolver any, tags ...string) {
 		return
 	}
 
-	value := typeIndirect(reflect.TypeOf(resolver))
+	value := typeIndirect(typeOf)
 
 	if value.Kind() != reflect.Struct {
 		panic("Container can receive only Resolver or struct or pointer to struct, including interfaces")
