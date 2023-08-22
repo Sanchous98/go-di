@@ -1,7 +1,7 @@
 package di
 
 import (
-	"github.com/Sanchous98/go-di/abi"
+	"github.com/Sanchous98/go-di/v2/abi"
 	"reflect"
 	"sync/atomic"
 )
@@ -12,13 +12,6 @@ type entry struct {
 	types    []uintptr
 	tags     []string
 	built    atomic.Bool
-}
-
-func defaultEntry(service any) *entry {
-	e := &entry{types: []uintptr{valueTypeId(service)}}
-	e.resolver = func(c *serviceContainer) any { return defaultBuilder(e, service, c) }
-
-	return e
 }
 
 func (e *entry) AddTags(tags ...string) { e.tags = append(e.tags, tags...) }
