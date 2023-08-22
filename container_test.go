@@ -74,11 +74,11 @@ type ContainerTestSuite struct {
 
 func (s *ContainerTestSuite) SetupTest() {
 	s.container = NewContainer()
-	s.container.Set(s.T())
+	s.container.Set(Service(s.T()))
 }
 
 func (s *ContainerTestSuite) TestResolverBinding() {
-	s.container.Set(func(cntr Container) *TestStruct {
+	s.container.Set(Resolver(func(cntr Container) *TestStruct {
 		testStruct := new(TestStruct)
 		testStruct.Dependency = cntr.Get(testStruct.Dependency).(*AnotherTestStruct)
 		testStruct.Dependency2 = *cntr.Get(testStruct.Dependency2).(*AnotherTestStruct)
@@ -86,8 +86,8 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 		testStruct.dependency4 = *cntr.Get(testStruct.dependency4).(*AnotherTestStruct)
 
 		return testStruct
-	})
-	s.container.Set(func(cntr Container) *AnotherTestStruct { return new(AnotherTestStruct) })
+	}))
+	s.container.Set(Resolver(func(cntr Container) *AnotherTestStruct { return new(AnotherTestStruct) }))
 	s.Require().NotPanics(s.container.Compile)
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
 	s.NotNil(testStruct.Dependency)
@@ -99,8 +99,8 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 }
 
 func (s *ContainerTestSuite) TestServiceBinding() {
-	s.container.Set(new(TestStruct))
-	s.container.Set(new(AnotherTestStruct))
+	s.container.Set(Default(new(TestStruct)))
+	s.container.Set(Default(new(AnotherTestStruct)))
 	s.Require().NotPanics(s.container.Compile)
 	s.Require().True(s.container.Has((*TestStruct)(nil)))
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
@@ -114,7 +114,7 @@ func (s *ContainerTestSuite) TestServiceBinding() {
 
 func (s *ContainerTestSuite) TestAutoWiring() {
 	testStruct := new(TestStruct)
-	s.container.Set(testStruct)
+	s.container.Set(Default(testStruct))
 	s.Require().NotPanics(s.container.Compile)
 
 	s.NotNil(testStruct.Dependency)
@@ -127,7 +127,7 @@ func (s *ContainerTestSuite) TestAutoWiring() {
 
 func (s *ContainerTestSuite) TestSelfReferences() {
 	testStruct := new(AnotherTestStruct)
-	s.container.Set(testStruct)
+	s.container.Set(Default(testStruct))
 	s.Require().NotPanics(s.container.Compile)
 	s.NotNil(testStruct.Container)
 	s.IsType(new(serviceContainer), testStruct.Container)
@@ -136,8 +136,8 @@ func (s *ContainerTestSuite) TestSelfReferences() {
 func (s *ContainerTestSuite) TestTagged() {
 	testStruct := new(TestStruct)
 	anotherTestStruct := new(AnotherTestStruct)
-	s.container.Set(testStruct)
-	s.container.Set(anotherTestStruct, "test_tag")
+	s.container.Set(Default(testStruct))
+	s.container.Set(Default(anotherTestStruct), WithTags("test_tag"))
 
 	s.Require().NotPanics(s.container.Compile)
 
@@ -160,8 +160,7 @@ func (s *ContainerTestSuite) TestTagged() {
 
 func (s *ContainerTestSuite) TestGetByTag() {
 	for i := 0; i < 10; i++ {
-		anotherTestStruct := new(AnotherTestStruct)
-		s.container.Set(anotherTestStruct, "test_tag")
+		s.container.Set(Default(new(AnotherTestStruct)), WithTags("test_tag"))
 	}
 
 	s.Require().NotPanics(s.container.Compile)
@@ -169,9 +168,8 @@ func (s *ContainerTestSuite) TestGetByTag() {
 	s.Len(s.container.GetByTag("test_tag"), 10)
 }
 
-func (s *ContainerTestSuite) TestAppendingTypes() {
-	s.container.Set(new(AnotherTestStruct))
-	s.Nil(s.container.AppendTypes((*AnotherTestStruct)(nil), new(TestInterface)))
+func (s *ContainerTestSuite) TestAnnotating() {
+	s.container.Set(Default(new(AnotherTestStruct)), Annotate[TestInterface]())
 	s.NotPanics(s.container.Compile)
 
 	s.True(s.container.Has((*AnotherTestStruct)(nil)))
@@ -181,15 +179,13 @@ func (s *ContainerTestSuite) TestAppendingTypes() {
 }
 
 func (s *ContainerTestSuite) TestBuildRunsConstructor() {
-	s.container.Set(func(c Container) Container {
-		return s.container
-	})
-	s.container.Build(new(AnotherTestStruct))
+	s.container.Set(Resolver(func(c Container) Container { return s.container }))
+	s.container.Build(Default(new(AnotherTestStruct)))
 	s.True(s.container.Get((*AnotherTestStruct)(nil)).(*AnotherTestStruct).called)
 }
 
 func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
-	s.container.Set(new(TestInterfaceValue))
+	s.container.Set(Default(new(TestInterfaceValue)))
 	s.PanicsWithValue(
 		`interface type without bound value. Remove "inject" tag or set a value, bound by this interface type`,
 		s.container.Compile,
@@ -199,11 +195,11 @@ func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
 func (s *ContainerTestSuite) TestCallbackServiceNotNil() {
 	s.T().Skip()
 
-	s.container.Set(func(c Container) TestInterface {
-		return c.Build(new(AnotherTestStruct)).(TestInterface)
-	})
-	s.container.Set(new(TestInterfaceValue))
-	s.container.Compile()
+	s.container.Set(Resolver(func(c Container) TestInterface {
+		return c.Build(Default(new(AnotherTestStruct))).(TestInterface)
+	}))
+	s.container.Set(Default(new(TestInterfaceValue)))
+	s.NotPanics(s.container.Compile)
 
 	t := s.container.Get((*TestInterfaceValue)(nil)).(*TestInterfaceValue)
 	s.NotNil(t.Test)
@@ -233,11 +229,11 @@ func BenchmarkServiceContainer_Compile(b *testing.B) {
 	container := NewContainer()
 
 	for i := 0; i < 1000; i++ {
-		testStruct := new(benchTestStruct)
-		anotherTestStruct := new(benchAnotherTestStruct)
-		container.Set(testStruct)
-		container.Set(anotherTestStruct, "test_tag")
+		container.Set(Service(new(benchTestStruct)), DefaultResolver())
+		container.Set(Service(new(benchAnotherTestStruct)), DefaultResolver(), WithTags("test_tag"))
 	}
+
+	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		container.Compile()

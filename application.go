@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"reflect"
 	"sync"
 	"syscall"
 )
@@ -17,30 +16,12 @@ func NewApplication(name string) Runner {
 type application struct {
 	PrecompiledContainer
 
-	name          string
-	beforeCompile []func()
+	name string
 }
 
 func (a *application) Name() string { return a.name }
 
-func (a *application) Set(service any, tags ...string) {
-	_t := reflect.TypeOf(service)
-
-	if _t.Kind() == reflect.Func && _t.NumOut() == 0 {
-		a.beforeCompile = append(a.beforeCompile, func() {
-			reflect.ValueOf(service).Call([]reflect.Value{reflect.ValueOf(a)})
-		})
-		return
-	}
-
-	a.PrecompiledContainer.Set(service, tags...)
-}
-
 func (a *application) Run(ctx context.Context) {
-	for _, f := range a.beforeCompile {
-		f()
-	}
-
 	a.Compile()
 
 	var stop context.CancelFunc

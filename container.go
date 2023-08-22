@@ -70,65 +70,14 @@ func (c *serviceContainer) Has(_type any) bool {
 	return false
 }
 
-func (c *serviceContainer) Set(resolver any, tags ...string) {
-	typeOf := reflect.TypeOf(resolver)
+func (c *serviceContainer) Set(options ...Option) {
+	e := new(entry)
 
-	if typeOf.Kind() == reflect.Func {
-		validateFunc(typeOf)
-
-		c.entries = append(c.entries, &entry{
-			types: []uintptr{valueTypeId(typeOf.Out(0))},
-			resolver: func(*serviceContainer) any {
-				return reflect.ValueOf(resolver).Call([]reflect.Value{reflect.ValueOf(c)})[0].Interface()
-			},
-			tags: tags,
-		})
-
-		return
-	}
-
-	value := typeIndirect(reflect.TypeOf(resolver))
-
-	if value.Kind() != reflect.Struct {
-		panic("Container can receive only Resolver or struct or pointer to struct, including interfaces")
-	}
-
-	e := &entry{
-		types: []uintptr{typeId(value)},
-		tags:  tags,
-	}
-
-	e.resolver = func(c *serviceContainer) any {
-		return defaultBuilder(e, resolver, c)
+	for _, option := range options {
+		option(e)
 	}
 
 	c.entries = append(c.entries, e)
-}
-
-func (c *serviceContainer) AppendTypes(entryType any, appendTypes ...any) error {
-	if !c.Has(entryType) {
-		return EntryNotFound
-	}
-
-	serviceType := valueTypeId(entryType)
-
-	for _, e := range c.buildingStack {
-		if e.TypeOf(serviceType) {
-			for _, appendType := range appendTypes {
-				e.AddType(valueTypeId(appendType))
-			}
-		}
-	}
-
-	for _, e := range c.entries {
-		if e.TypeOf(serviceType) {
-			for _, appendType := range appendTypes {
-				e.AddType(valueTypeId(appendType))
-			}
-		}
-	}
-
-	return nil
 }
 
 func (c *serviceContainer) All() []any {
@@ -148,13 +97,7 @@ func (c *serviceContainer) Compile() {
 
 func (c *serviceContainer) compile() {
 	// Self references. Is needed to inject Container as a service
-	c.entries = append(c.entries, &entry{
-		types: []uintptr{
-			valueTypeId(new(Container)),
-			valueTypeId(new(PrecompiledContainer)),
-		},
-		resolver: func(*serviceContainer) any { return c },
-	})
+	c.Set(Service[Container](c), Annotate[PrecompiledContainer]())
 
 	for _, e := range c.entries {
 		e.Build(c)
@@ -163,8 +106,14 @@ func (c *serviceContainer) compile() {
 	c.buildingStack = nil
 }
 
-func (c *serviceContainer) Build(service any) any {
-	if s := defaultEntry(service).Build(c); s != nil {
+func (c *serviceContainer) Build(options ...Option) any {
+	e := new(entry)
+
+	for _, option := range options {
+		option(e)
+	}
+
+	if s := e.Build(c); s != nil {
 		return s
 	}
 

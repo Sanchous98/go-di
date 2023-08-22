@@ -14,13 +14,6 @@ type entry struct {
 	built    atomic.Bool
 }
 
-func defaultEntry(service any) *entry {
-	e := &entry{types: []uintptr{valueTypeId(service)}}
-	e.resolver = func(c *serviceContainer) any { return defaultBuilder(e, service, c) }
-
-	return e
-}
-
 func (e *entry) AddTags(tags ...string) { e.tags = append(e.tags, tags...) }
 func (e *entry) AddType(_type uintptr)  { e.types = append(e.types, _type) }
 func (e *entry) TypeOf(_type uintptr) bool {
