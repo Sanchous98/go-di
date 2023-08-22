@@ -6,7 +6,7 @@ type Option = func(*entry)
 
 func Default[T any](s T) func(*entry) {
 	return func(e *entry) {
-		e.types = append(e.types, valueTypeId(s))
+		e.types = append(e.types, typeId(typeIndirect(typeOf[T]())))
 		e.resolver = func(c *serviceContainer) any { return defaultBuilder(e, s, c) }
 	}
 }
