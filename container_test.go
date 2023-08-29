@@ -80,7 +80,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 
 func (s *ContainerTestSuite) TestServiceBinding() {
 	s.container.Set(Default(new(AnotherTestStruct)))
-	s.container.Set(Constructor(func(testStruct *AnotherTestStruct) *TestStruct {
+	s.container.Set(Constructor[TestStruct](func(testStruct *AnotherTestStruct) *TestStruct {
 		return &TestStruct{
 			Dependency:  testStruct,
 			Dependency2: *testStruct,

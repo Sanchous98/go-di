@@ -51,7 +51,7 @@ func WithTags(tags ...string) Option {
 	return func(e *entry) { e.tags = append(e.tags, tags...) }
 }
 
-func Constructor(constructor any) Option {
+func Constructor[T any](constructor any) Option {
 	return func(e *entry) {
 		fn := reflect.ValueOf(constructor)
 
@@ -63,7 +63,7 @@ func Constructor(constructor any) Option {
 			panic("constructor must return a service")
 		}
 
-		e.types = append(e.types, typeId(typeIndirect(fn.Type().Out(0))))
+		e.types = append(e.types, typeId(typeIndirect(typeOf[T]())))
 		e.resolver = func(c *serviceContainer) any {
 			args := make([]reflect.Value, 0, fn.Type().NumIn())
 
