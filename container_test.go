@@ -42,26 +42,6 @@ type TestStruct struct {
 	called bool
 }
 
-type EnvTestStruct struct {
-	i64        int64      `env:"INT64"`
-	i          int        `env:"INT"`
-	i32        int32      `env:"INT32"`
-	i16        int16      `env:"INT16"`
-	i8         int8       `env:"INT8"`
-	ui64       uint64     `env:"UINT64"`
-	ui         uint       `env:"UINT"`
-	ui32       uint32     `env:"UINT32"`
-	ui16       uint16     `env:"UINT16:-80"`
-	ui8        uint8      `env:"UINT8"`
-	b          byte       `env:"UINT8"`
-	bl         bool       `env:"BOOL"`
-	float64    float64    `env:"FLOAT64"`
-	float32    float32    `env:"FLOAT32"`
-	complex128 complex128 `env:"COMPLEX128"`
-	complex64  complex64  `env:"COMPLEX64"`
-	str        string     `env:"STRING"`
-}
-
 func (t *TestStruct) Constructor() {
 	assert.False(t.t, t.called)
 	t.called = true
@@ -99,8 +79,15 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 }
 
 func (s *ContainerTestSuite) TestServiceBinding() {
-	s.container.Set(Default(new(TestStruct)))
 	s.container.Set(Default(new(AnotherTestStruct)))
+	s.container.Set(Constructor(func(testStruct *AnotherTestStruct) *TestStruct {
+		return &TestStruct{
+			Dependency:  testStruct,
+			Dependency2: *testStruct,
+			dependency3: testStruct,
+			dependency4: *testStruct,
+		}
+	}))
 	s.Require().NotPanics(s.container.Compile)
 	s.Require().True(s.container.Has((*TestStruct)(nil)))
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
@@ -193,8 +180,6 @@ func (s *ContainerTestSuite) TestNotBuildingInterfaceFields() {
 }
 
 func (s *ContainerTestSuite) TestCallbackServiceNotNil() {
-	s.T().Skip()
-
 	s.container.Set(Resolver(func(c Container) TestInterface {
 		return c.Build(Default(new(AnotherTestStruct))).(TestInterface)
 	}))
@@ -203,6 +188,20 @@ func (s *ContainerTestSuite) TestCallbackServiceNotNil() {
 
 	t := s.container.Get((*TestInterfaceValue)(nil)).(*TestInterfaceValue)
 	s.NotNil(t.Test)
+}
+
+func (s *ContainerTestSuite) TestConstructorFunction() {
+	s.container.Set(Default(new(TestStruct)))
+	s.container.Set(Default(new(AnotherTestStruct)))
+	s.Require().NotPanics(s.container.Compile)
+	s.Require().True(s.container.Has((*TestStruct)(nil)))
+	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
+	s.NotNil(testStruct.Dependency)
+	s.NotEmpty(testStruct.Dependency2)
+	s.NotNil(testStruct.dependency3)
+	s.NotEmpty(testStruct.dependency4)
+	s.Len(s.container.(*serviceContainer).entries, 4)
+	s.Len(s.container.All(), len(s.container.(*serviceContainer).entries))
 }
 
 func TestContainer(t *testing.T) { suite.Run(t, new(ContainerTestSuite)) }
@@ -229,8 +228,10 @@ func BenchmarkServiceContainer_Compile(b *testing.B) {
 	container := NewContainer()
 
 	for i := 0; i < 1000; i++ {
-		container.Set(Service(new(benchTestStruct)), DefaultResolver())
-		container.Set(Service(new(benchAnotherTestStruct)), DefaultResolver(), WithTags("test_tag"))
+		testStruct := new(benchTestStruct)
+		anotherTestStruct := new(benchAnotherTestStruct)
+		container.Set(Service(testStruct), DefaultResolver())
+		container.Set(Service(anotherTestStruct), DefaultResolver(), WithTags("test_tag"))
 	}
 
 	b.ResetTimer()

@@ -63,7 +63,9 @@ func (e *entry) Destroy() {
 	case Destructible:
 		e.resolved.(Destructible).Destructor()
 	}
-	e.resolved = nil
+	if e.resolver != nil {
+		e.resolved = nil
+	}
 	e.built.Store(false)
 }
 

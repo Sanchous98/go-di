@@ -1,17 +1,11 @@
 package di
 
 import (
-	"errors"
-	"reflect"
 	"sync/atomic"
 )
 
-const (
-	// Use injectTag to inject dependency into a service
-	injectTag = "inject"
-)
-
-var EntryNotFound = errors.New("entry not found")
+// Use injectTag to inject dependency into a service
+const injectTag = "inject"
 
 type serviceContainer struct {
 	build atomic.Bool
@@ -70,11 +64,12 @@ func (c *serviceContainer) Has(_type any) bool {
 	return false
 }
 
-func (c *serviceContainer) Set(options ...Option) {
+func (c *serviceContainer) Set(option Option, options ...Option) {
 	e := new(entry)
+	option(e)
 
-	for _, option := range options {
-		option(e)
+	for _, o := range options {
+		o(e)
 	}
 
 	c.entries = append(c.entries, e)
@@ -106,11 +101,12 @@ func (c *serviceContainer) compile() {
 	c.buildingStack = nil
 }
 
-func (c *serviceContainer) Build(options ...Option) any {
+func (c *serviceContainer) Build(option Option, options ...Option) any {
 	e := new(entry)
+	option(e)
 
-	for _, option := range options {
-		option(e)
+	for _, o := range options {
+		o(e)
 	}
 
 	if s := e.Build(c); s != nil {
@@ -126,21 +122,4 @@ func (c *serviceContainer) Destroy() {
 	}
 
 	c.build.Store(false)
-}
-
-func validateFunc(typeOf reflect.Type) {
-	if typeOf.Kind() != reflect.Func {
-		panic("misuse of validateFunc")
-	}
-
-	if typeOf.NumIn() > 1 {
-		panic("Resolver receives only 1 parameter")
-	}
-	if typeOf.NumIn() == 1 && !typeOf.In(0).Implements(reflect.TypeOf(new(Container)).Elem()) {
-		panic("Resolver receives only Container")
-	}
-
-	if typeOf.NumOut() == 0 {
-		panic("resolver must return service")
-	}
 }

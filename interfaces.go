@@ -7,9 +7,9 @@ import (
 // Container handles services and fills them
 type Container interface {
 	// Set defines new entry in container
-	Set(...Option)
+	Set(Option, ...Option)
 	// Build sets new entry in container without adding it to container
-	Build(...Option) any
+	Build(Option, ...Option) any
 	// Has checks whether the service of passed type exists
 	Has(any) bool
 	// Get returns service from container

@@ -7,11 +7,11 @@ To start you have to create container instance, fill it with services and compil
 ```go
 package main
 
-import "github.com/Sanchous98/go-di"
+import "github.com/Sanchous98/go-di/v2"
 
 func main() {
     container := di.NewContainer()
-    container.Set(&ExampleService{})
+    container.Set(di.Service(&ExampleService{}))
     container.Compile()
     container.Get((*ExampleService)(nil)).(*ExampleService) // Returns filled ExampleService
 }
@@ -24,9 +24,9 @@ There are some ways container can compile a service:
    the container. It's better to use interface, you need, because of LSP
 
 ```go
-container.Set(func () *ExampleInterfaceType {
+container.Set(di.Resolver(func (di.Container) *ExampleInterfaceType {
     return &ExampleService{} 
-})
+}))
 container.Get((*ExampleInterfaceType)(nil)).(*ExampleInterfaceType) // Returns *ExampleService
 ```
 
@@ -34,22 +34,9 @@ container.Get((*ExampleInterfaceType)(nil)).(*ExampleInterfaceType) // Returns *
    precompile container to use it without any performance impact.
 
 ```go
-container.Set(&ExampleService{})
+container.Set(di.Service(&ExampleService{}))
 container.Compile()
 container.Get((*ExampleService)(nil)).(*ExampleService) // Returns *ExampleService
-```
-
-3. Leave as it is. In this case container will also resolve your service, but only as a dependency for other services.
-   Useful for libraries.
-
-The default implementation of container, provided by library is a global state. It also handler environment variables.
-You can build your application, working in a sandbox.
-
-```go
-di.Application().SetEntryPoints(func (container GlobalState) {
-    ...
-})
-di.Application().Run()
 ```
 
 Services can have default steps to self initialize and self destroy. To use this feature, implement Constructable and
@@ -70,14 +57,14 @@ gracefully.
 
 ```go
 type Launchable interface {
-    Launch()
+    Launch(context.Context)
 }
 
 type Stoppable interface {
-    Shutdown()
+    Shutdown(context.Context)
 }
 ```
 
 ```Constructor()``` method is called on service compiling. ```Destructor()``` method is called on application exiting
-when the container destroys. ```Launch()``` is called on ```Run()``` method calling. ```Shutdown()``` method is called
+when the container destroys. ```Launch(context.Context)``` is called on ```Run()``` method calling. ```Shutdown(context.Context)``` method is called
 on application exiting before the container destroys.
