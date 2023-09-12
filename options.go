@@ -68,13 +68,11 @@ func Constructor[T any](constructor any) Option {
 			args := make([]reflect.Value, 0, fn.Type().NumIn())
 
 			for i := 0; i < fn.Type().NumIn(); i++ {
-				service := c.Get(fn.Type().In(i))
-
-				if service == nil {
-					service = reflect.Zero(fn.Type().In(i))
+				if service := c.Get(fn.Type().In(i)); service == nil {
+					args = append(args, reflect.Zero(fn.Type().In(i)))
+				} else {
+					args = append(args, reflect.ValueOf(service))
 				}
-
-				args = append(args, reflect.ValueOf(service))
 			}
 
 			return fn.Call(args)[0].Interface()

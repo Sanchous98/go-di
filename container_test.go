@@ -80,14 +80,7 @@ func (s *ContainerTestSuite) TestResolverBinding() {
 
 func (s *ContainerTestSuite) TestServiceBinding() {
 	s.container.Set(Default(new(AnotherTestStruct)))
-	s.container.Set(Constructor[TestStruct](func(testStruct *AnotherTestStruct) *TestStruct {
-		return &TestStruct{
-			Dependency:  testStruct,
-			Dependency2: *testStruct,
-			dependency3: testStruct,
-			dependency4: *testStruct,
-		}
-	}))
+	s.container.Set(Default(new(TestStruct)))
 	s.Require().NotPanics(s.container.Compile)
 	s.Require().True(s.container.Has((*TestStruct)(nil)))
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
@@ -193,8 +186,15 @@ func (s *ContainerTestSuite) TestCallbackServiceNotNil() {
 }
 
 func (s *ContainerTestSuite) TestConstructorFunction() {
-	s.container.Set(Default(new(TestStruct)))
 	s.container.Set(Default(new(AnotherTestStruct)))
+	s.container.Set(Constructor[TestStruct](func(testStruct *AnotherTestStruct) *TestStruct {
+		return &TestStruct{
+			Dependency:  testStruct,
+			Dependency2: *testStruct,
+			dependency3: testStruct,
+			dependency4: *testStruct,
+		}
+	}))
 	s.Require().NotPanics(s.container.Compile)
 	s.Require().True(s.container.Has((*TestStruct)(nil)))
 	testStruct := s.container.Get((*TestStruct)(nil)).(*TestStruct)
