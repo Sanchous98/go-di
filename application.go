@@ -8,15 +8,16 @@ import (
 	"syscall"
 )
 
-func NewApplication(name string) Runner {
-	return &application{name: name, PrecompiledContainer: new(serviceContainer)}
+func NewApplication(name string, logger Logger) Runner {
+	return &application{name: name, PrecompiledContainer: new(serviceContainer), logger: logger}
 }
 
 // application is a global state for program
 type application struct {
 	PrecompiledContainer
 
-	name string
+	name   string
+	logger Logger
 }
 
 func (a *application) Name() string { return a.name }
@@ -33,7 +34,7 @@ func (a *application) Run(ctx context.Context) {
 	for _, service := range all {
 		switch service.(type) {
 		case Launchable:
-			go service.(Launchable).Launch(ctx)
+			go a.launch(ctx, service.(Launchable))
 		}
 	}
 
@@ -54,4 +55,15 @@ func (a *application) Run(ctx context.Context) {
 
 		wg.Wait()
 	}
+}
+
+func (a *application) launch(ctx context.Context, service Launchable) {
+	defer func() {
+		if err := recover(); err != nil {
+			a.logger.Errorln(err)
+			go a.launch(ctx, service)
+		}
+	}()
+
+	service.Launch(ctx)
 }
